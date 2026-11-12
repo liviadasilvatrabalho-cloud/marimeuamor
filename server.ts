@@ -1,6 +1,5 @@
 import './env';
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import path from 'path';
 import {
@@ -688,6 +687,7 @@ async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -715,4 +715,9 @@ async function startServer() {
   process.on('SIGTERM', shutdown);
 }
 
-startServer();
+// No Vercel (serverless) o startServer não roda — o app é exportado como função em api/index.ts
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
