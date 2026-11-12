@@ -7,11 +7,11 @@
     {
       "source": "/(.*)",
       "headers": [
-        "X-DNS-Prefetch-Control: off",
-        "X-Frame-Options: SAMEORIGIN",
-        "X-Content-Type-Options: nosniff",
-        "Referrer-Policy: strict-origin-when-cross-origin",
-        "Content-Security-Policy: default-src 'self' data: 'unsafe-inline' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline' https:; connect-src 'self' https: http:; frame-src 'none'"
+        { "key": "X-DNS-Prefetch-Control", "value": "off" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self' data: 'unsafe-inline' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https:; connect-src 'self' https: http:; frame-src 'none'" }
       ]
     }
   ],
