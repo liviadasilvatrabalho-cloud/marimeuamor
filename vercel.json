@@ -1,0 +1,36 @@
+{
+  "framework": "vite",
+  "git": {
+    "filter": "src/"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        "X-DNS-Prefetch-Control: off",
+        "X-Frame-Options: SAMEORIGIN",
+        "X-Content-Type-Options: nosniff",
+        "Referrer-Policy: strict-origin-when-cross-origin",
+        "Content-Security-Policy: default-src 'self' data: 'unsafe-inline' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline' https:; connect-src 'self' https: http:; frame-src 'none'"
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/api/barcode/:code",
+      "destination": "https://world.openfoodfacts.org/api/v2/product/:code.json",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "from": "/(.*)",
+      "to": "https://marimeuamorr.vercel.app/$1"
+    }
+  ],
+  "build": {
+    "env": {
+      "GEMINI_API_KEY": "@env.GEMINI_API_KEY"
+    }
+  }
+}

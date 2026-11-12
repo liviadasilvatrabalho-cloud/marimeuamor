@@ -1,0 +1,4198 @@
+{
+  "migrations": {
+    "totalFiles": 20,
+    "appliedCount": 20,
+    "pending": [],
+    "orphaned": [],
+    "applied": [
+      "001_kitchen_spaces_profiles_memberships.sql",
+      "002_foods.sql",
+      "003_products_barcodes.sql",
+      "004_household_measures.sql",
+      "005_recipes.sql",
+      "006_marmitas.sql",
+      "007_meals.sql",
+      "008_image_analyses.sql",
+      "009_orders.sql",
+      "010_shopping_lists.sql",
+      "011_storage_buckets_metadata.sql",
+      "012_nutrition_functions.sql",
+      "013_updated_at_triggers.sql",
+      "014_rls_policies.sql",
+      "015_seed_data.sql",
+      "016_integration_hardening.sql",
+      "016_marmita_status_publicada.sql",
+      "017_recipe_totals_per_serving.sql",
+      "018_test_fixes.sql",
+      "019_storage_profiles_rls.sql"
+    ]
+  },
+  "tables": [
+    {
+      "name": "app_state",
+      "rls": false,
+      "indexes": 2,
+      "rows": 1,
+      "comment": null,
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "data",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "food_household_conversions",
+      "rls": true,
+      "indexes": 4,
+      "rows": 0,
+      "comment": "Conversão de medida caseira para gramas/ml, específica a cada alimento.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "household_measure_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "grams",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "milliliters",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "estimation_method",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "conversion_origin",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "food_nutrition_history",
+      "rls": true,
+      "indexes": 3,
+      "rows": 0,
+      "comment": "Audit trail de alterações nutricionais de alimentos (antes/depois).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "previous_values",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "new_values",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "change_reason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "data_source",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "foods",
+      "rls": true,
+      "indexes": 9,
+      "rows": 2,
+      "comment": "Tabela principal de alimentos com valores nutricionais por 100g e procedência.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "created_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "alternative_name",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "brand",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "category",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "prep_state",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'cru'::text"
+        },
+        {
+          "column_name": "reference_unit",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'100g'::text"
+        },
+        {
+          "column_name": "calories_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat_total_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat_saturated_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "sugars_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "sodium_per_100g",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "nutrition_source",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'Manual'::text"
+        },
+        {
+          "column_name": "data_origin",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "verification_status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'pending'::text"
+        },
+        {
+          "column_name": "verified_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "verified_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "household_measures",
+      "rls": true,
+      "indexes": 1,
+      "rows": 10,
+      "comment": "Catálogo de medidas caseiras (colher de sopa, xícara, copo, unidade, fatia, etc.).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "short_label",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "typical_volume_ml",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "visual_icon",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "image_analyses",
+      "rls": true,
+      "indexes": 7,
+      "rows": 0,
+      "comment": "Resultado do reconhecimento de imagem: análise original e resultado corrigido separados.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "original_photo_path",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "analysis_date",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "identified_ingredients",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "estimated_quantities",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "estimated_nutrition",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "confidence_level",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "ai_model",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'pendente'::text"
+        },
+        {
+          "column_name": "user_corrections",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "final_result",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "meal_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "kitchen_spaces",
+      "rls": true,
+      "indexes": 2,
+      "rows": 1,
+      "comment": "Espaço de cozinha compartilhado entre usuários (ex: Lívia e Mariana).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'Nossa Cozinha'::text"
+        },
+        {
+          "column_name": "slug",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'nossa-cozinha'::text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "marmita_items",
+      "rls": true,
+      "indexes": 3,
+      "rows": 6,
+      "comment": "Composição de uma marmita com valores nutricionais congelados no preparo.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "marmita_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "weight_grams",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "calories",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "marmitas",
+      "rls": true,
+      "indexes": 8,
+      "rows": 3,
+      "comment": "Marmitas com data de preparo, validade, responsável e valores nutricionais do momento.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "prepared_by",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "recipient_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "photo_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "prep_date",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "expiry_date",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'preparada'::text"
+        },
+        {
+          "column_name": "total_calories",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_protein",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_carbs",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_fat",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_fiber",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "meal_items",
+      "rls": true,
+      "indexes": 4,
+      "rows": 1,
+      "comment": "Itens de uma refeição associados a alimento ou produto com peso utilizado.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "meal_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "product_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "weight_grams",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "calories",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "source",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "verified",
+          "data_type": "boolean",
+          "is_nullable": "YES",
+          "column_default": "false"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "meals",
+      "rls": true,
+      "indexes": 7,
+      "rows": 1,
+      "comment": "Refeições registradas com método de identificação e grau de confiança.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "meal_date",
+          "data_type": "date",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "meal_type",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "title",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "photo_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "identification_method",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "confidence_level",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "confidence_notes",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_calories",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_protein",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_carbs",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_fat",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "total_fiber",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "memberships",
+      "rls": true,
+      "indexes": 4,
+      "rows": 2,
+      "comment": "Vincula perfis a espaços compartilhados, definindo papel dentro do espaço.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "profile_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "role_in_space",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'member'::text"
+        },
+        {
+          "column_name": "joined_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "order_status_history",
+      "rls": true,
+      "indexes": 3,
+      "rows": 0,
+      "comment": "Audit trail de mudanças de status dos pedidos.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "order_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "previous_status",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "new_status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "rls": true,
+      "indexes": 6,
+      "rows": 1,
+      "comment": "Solicitações de marmitas da Mariana, visíveis para Lívia.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "requester_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "reference_photo_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "desired_ingredients",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "recipe_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "observations",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'pendente'::text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "completed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "product_nutrition_history",
+      "rls": true,
+      "indexes": 3,
+      "rows": 0,
+      "comment": "Audit trail de alterações nutricionais de produtos.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "product_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "previous_values",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "new_values",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "change_reason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "data_source",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "changed_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "rls": true,
+      "indexes": 7,
+      "rows": 1,
+      "comment": "Produtos industrializados com código de barras e valores nutricionais.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "created_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "barcode",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "commercial_name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "brand",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "manufacturer",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "category",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "image_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "package_size",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "serving_quantity",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "serving_unit",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "calories_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "calories_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "sodium_per_100",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "data_source",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'Manual'::text"
+        },
+        {
+          "column_name": "last_updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "verification_status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'pending'::text"
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "profile_sessions",
+      "rls": true,
+      "indexes": 4,
+      "rows": 0,
+      "comment": "Sessões opacas de perfil. Apenas o hash SHA-256 do token é armazenado.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "profile_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "token_hash",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "user_agent",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "ip_address",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "expires_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "revoked_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "profiles",
+      "rls": true,
+      "indexes": 5,
+      "rows": 2,
+      "comment": "Perfis de usuário com metadados nutricionais e papel (admin/user).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "auth_user_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "email",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "role",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'user'::text"
+        },
+        {
+          "column_name": "calorie_goal",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein_goal_g",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs_goal_g",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat_goal_g",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "water_goal_ml",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "current_weight_kg",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "target_weight_kg",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "height_cm",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "diet_preference",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "pin_hash",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "recipe_ingredients",
+      "rls": true,
+      "indexes": 4,
+      "rows": 8,
+      "comment": "Ingredientes de uma receita com peso em gramas e macros calculados.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "recipe_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "product_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "quantity",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "unit",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "weight_grams",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "calories",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "recipes",
+      "rls": true,
+      "indexes": 6,
+      "rows": 3,
+      "comment": "Receitas com status (sugerida/aprovada/publicada/arquivada) e valores nutricionais por porção.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "author_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "title",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "photo_path",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "instructions",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "servings",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "1"
+        },
+        {
+          "column_name": "prep_time_minutes",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "status",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'sugerida'::text"
+        },
+        {
+          "column_name": "calories_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "protein_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "carbs_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fat_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "fiber_per_serving",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "is_favorite",
+          "data_type": "boolean",
+          "is_nullable": "YES",
+          "column_default": "false"
+        },
+        {
+          "column_name": "carinho_tip",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "deleted_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "schema_migrations",
+      "rls": false,
+      "indexes": 1,
+      "rows": 20,
+      "comment": null,
+      "columns": [
+        {
+          "column_name": "version",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "applied_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "shopping_list_items",
+      "rls": true,
+      "indexes": 5,
+      "rows": 0,
+      "comment": "Itens de uma lista de compras (alimento ou produto) com quantidade e status de compra.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "shopping_list_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "food_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "product_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "quantity",
+          "data_type": "numeric",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "unit",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "is_purchased",
+          "data_type": "boolean",
+          "is_nullable": "YES",
+          "column_default": "false"
+        },
+        {
+          "column_name": "purchased_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "linked_recipe_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "linked_marmita_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "shopping_lists",
+      "rls": true,
+      "indexes": 4,
+      "rows": 0,
+      "comment": "Listas de compras do espaço compartilhado.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "created_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "week_start_date",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "updated_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        },
+        {
+          "column_name": "external_id",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        }
+      ]
+    },
+    {
+      "name": "storage_buckets",
+      "rls": true,
+      "indexes": 2,
+      "rows": 6,
+      "comment": "Buckets de armazenamento de fotografias (privados, URLs assinadas quando necessário).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "access",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'private'::text"
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "storage_files",
+      "rls": true,
+      "indexes": 3,
+      "rows": 0,
+      "comment": "Metadados de arquivos armazenados (caminhos, nunca binário no Postgres).",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": "gen_random_uuid()"
+        },
+        {
+          "column_name": "bucket",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "file_path",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "file_name",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "mime_type",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "size_bytes",
+          "data_type": "bigint",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "uploaded_by",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "signed_url",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "sync_events",
+      "rls": true,
+      "indexes": 2,
+      "rows": 80,
+      "comment": "Fila de eventos para sincronização incremental entre os membros do espaço.",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "bigint",
+          "is_nullable": "NO",
+          "column_default": "nextval('sync_events_id_seq'::regclass)"
+        },
+        {
+          "column_name": "kitchen_space_id",
+          "data_type": "uuid",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "entity",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "entity_id",
+          "data_type": "uuid",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "action",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null
+        },
+        {
+          "column_name": "payload",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null
+        },
+        {
+          "column_name": "created_at",
+          "data_type": "timestamp with time zone",
+          "is_nullable": "NO",
+          "column_default": "now()"
+        }
+      ]
+    }
+  ],
+  "foreignKeys": [
+    {
+      "tabela": "food_household_conversions",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "coluna": "household_measure_id",
+      "ref_tabela": "household_measures",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "coluna": "changed_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "foods",
+      "coluna": "created_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "foods",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "foods",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "foods",
+      "coluna": "verified_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "image_analyses",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "image_analyses",
+      "coluna": "meal_id",
+      "ref_tabela": "meals",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "image_analyses",
+      "coluna": "user_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "marmita_items",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "marmita_items",
+      "coluna": "marmita_id",
+      "ref_tabela": "marmitas",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "marmitas",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "marmitas",
+      "coluna": "prepared_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "marmitas",
+      "coluna": "recipient_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "marmitas",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "meal_items",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "meal_items",
+      "coluna": "meal_id",
+      "ref_tabela": "meals",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "meal_items",
+      "coluna": "product_id",
+      "ref_tabela": "products",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "meals",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "meals",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "meals",
+      "coluna": "user_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "memberships",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "memberships",
+      "coluna": "profile_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "order_status_history",
+      "coluna": "changed_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "order_status_history",
+      "coluna": "order_id",
+      "ref_tabela": "orders",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "orders",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "orders",
+      "coluna": "recipe_id",
+      "ref_tabela": "recipes",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "orders",
+      "coluna": "requester_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "orders",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "coluna": "changed_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "coluna": "product_id",
+      "ref_tabela": "products",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "products",
+      "coluna": "created_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "products",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "products",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "profile_sessions",
+      "coluna": "profile_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "coluna": "product_id",
+      "ref_tabela": "products",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "coluna": "recipe_id",
+      "ref_tabela": "recipes",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "recipes",
+      "coluna": "author_id",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "recipes",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "recipes",
+      "coluna": "updated_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "coluna": "food_id",
+      "ref_tabela": "foods",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "coluna": "linked_marmita_id",
+      "ref_tabela": "marmitas",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "coluna": "linked_recipe_id",
+      "ref_tabela": "recipes",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "coluna": "product_id",
+      "ref_tabela": "products",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "coluna": "shopping_list_id",
+      "ref_tabela": "shopping_lists",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "shopping_lists",
+      "coluna": "created_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "shopping_lists",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    },
+    {
+      "tabela": "storage_files",
+      "coluna": "uploaded_by",
+      "ref_tabela": "profiles",
+      "ref_coluna": "id",
+      "delete_rule": "SET NULL"
+    },
+    {
+      "tabela": "sync_events",
+      "coluna": "kitchen_space_id",
+      "ref_tabela": "kitchen_spaces",
+      "ref_coluna": "id",
+      "delete_rule": "CASCADE"
+    }
+  ],
+  "constraints": [
+    {
+      "tabela": "app_state",
+      "conname": "app_state_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "conname": "food_household_conversions_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "conname": "food_household_conversions_food_id_household_measure_id_key",
+      "def": "UNIQUE (food_id, household_measure_id)"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "conname": "food_household_conversions_household_measure_id_fkey",
+      "def": "FOREIGN KEY (household_measure_id) REFERENCES household_measures(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "conname": "food_household_conversions_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "conname": "food_nutrition_history_changed_by_fkey",
+      "def": "FOREIGN KEY (changed_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "conname": "food_nutrition_history_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "conname": "food_nutrition_history_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_created_by_fkey",
+      "def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_nutrition_source_check",
+      "def": "CHECK ((nutrition_source = ANY (ARRAY['TACO'::text, 'TBCA'::text, 'USDA'::text, 'Open Food Facts'::text, 'Manual'::text, 'Rótulo'::text])))"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_prep_state_check",
+      "def": "CHECK ((prep_state = ANY (ARRAY['cru'::text, 'cozido'::text, 'assado'::text, 'grelhado'::text, 'frito'::text, 'refogado'::text, 'no_vapor'::text])))"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_verification_status_check",
+      "def": "CHECK ((verification_status = ANY (ARRAY['pending'::text, 'verified'::text, 'rejected'::text])))"
+    },
+    {
+      "tabela": "foods",
+      "conname": "foods_verified_by_fkey",
+      "def": "FOREIGN KEY (verified_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "household_measures",
+      "conname": "household_measures_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_confidence_level_check",
+      "def": "CHECK (((confidence_level >= 0) AND (confidence_level <= 100)))"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_meal_id_fkey",
+      "def": "FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_status_check",
+      "def": "CHECK ((status = ANY (ARRAY['pendente'::text, 'corrigido'::text, 'confirmado'::text, 'rejeitado'::text])))"
+    },
+    {
+      "tabela": "image_analyses",
+      "conname": "image_analyses_user_id_fkey",
+      "def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "kitchen_spaces",
+      "conname": "kitchen_spaces_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "kitchen_spaces",
+      "conname": "kitchen_spaces_slug_key",
+      "def": "UNIQUE (slug)"
+    },
+    {
+      "tabela": "marmita_items",
+      "conname": "marmita_items_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "marmita_items",
+      "conname": "marmita_items_marmita_id_fkey",
+      "def": "FOREIGN KEY (marmita_id) REFERENCES marmitas(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "marmita_items",
+      "conname": "marmita_items_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_prepared_by_fkey",
+      "def": "FOREIGN KEY (prepared_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_recipient_id_fkey",
+      "def": "FOREIGN KEY (recipient_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_status_check",
+      "def": "CHECK ((status = ANY (ARRAY['preparada'::text, 'entregue'::text, 'consumida'::text, 'cancelada'::text, 'publicada'::text])))"
+    },
+    {
+      "tabela": "marmitas",
+      "conname": "marmitas_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "meal_items",
+      "conname": "meal_items_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "meal_items",
+      "conname": "meal_items_meal_id_fkey",
+      "def": "FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "meal_items",
+      "conname": "meal_items_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "meal_items",
+      "conname": "meal_items_product_id_fkey",
+      "def": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_confidence_level_check",
+      "def": "CHECK (((confidence_level >= 0) AND (confidence_level <= 100)))"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_identification_method_check",
+      "def": "CHECK ((identification_method = ANY (ARRAY['pesagem'::text, 'manual'::text, 'foto'::text, 'rotulo'::text])))"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_meal_type_check",
+      "def": "CHECK ((meal_type = ANY (ARRAY['cafe'::text, 'almoco'::text, 'lanche'::text, 'jantar'::text, 'ceia'::text])))"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "meals",
+      "conname": "meals_user_id_fkey",
+      "def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "memberships",
+      "conname": "memberships_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "memberships",
+      "conname": "memberships_kitchen_space_id_profile_id_key",
+      "def": "UNIQUE (kitchen_space_id, profile_id)"
+    },
+    {
+      "tabela": "memberships",
+      "conname": "memberships_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "memberships",
+      "conname": "memberships_profile_id_fkey",
+      "def": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "memberships",
+      "conname": "memberships_role_in_space_check",
+      "def": "CHECK ((role_in_space = ANY (ARRAY['admin'::text, 'member'::text])))"
+    },
+    {
+      "tabela": "order_status_history",
+      "conname": "order_status_history_changed_by_fkey",
+      "def": "FOREIGN KEY (changed_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "order_status_history",
+      "conname": "order_status_history_order_id_fkey",
+      "def": "FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "order_status_history",
+      "conname": "order_status_history_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_recipe_id_fkey",
+      "def": "FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_requester_id_fkey",
+      "def": "FOREIGN KEY (requester_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_status_check",
+      "def": "CHECK ((status = ANY (ARRAY['pendente'::text, 'em_preparacao'::text, 'concluida'::text, 'cancelada'::text])))"
+    },
+    {
+      "tabela": "orders",
+      "conname": "orders_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "conname": "product_nutrition_history_changed_by_fkey",
+      "def": "FOREIGN KEY (changed_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "conname": "product_nutrition_history_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "conname": "product_nutrition_history_product_id_fkey",
+      "def": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_barcode_key",
+      "def": "UNIQUE (barcode)"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_created_by_fkey",
+      "def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_data_source_check",
+      "def": "CHECK ((data_source = ANY (ARRAY['Open Food Facts'::text, 'Manual'::text, 'Rótulo'::text])))"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "products",
+      "conname": "products_verification_status_check",
+      "def": "CHECK ((verification_status = ANY (ARRAY['pending'::text, 'verified'::text, 'rejected'::text])))"
+    },
+    {
+      "tabela": "profile_sessions",
+      "conname": "profile_sessions_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "profile_sessions",
+      "conname": "profile_sessions_profile_id_fkey",
+      "def": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "profile_sessions",
+      "conname": "profile_sessions_token_hash_key",
+      "def": "UNIQUE (token_hash)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_auth_user_id_key",
+      "def": "UNIQUE (auth_user_id)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_email_key",
+      "def": "UNIQUE (email)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_role_check",
+      "def": "CHECK ((role = ANY (ARRAY['admin'::text, 'user'::text])))"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "conname": "recipe_ingredients_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "conname": "recipe_ingredients_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "conname": "recipe_ingredients_product_id_fkey",
+      "def": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "conname": "recipe_ingredients_recipe_id_fkey",
+      "def": "FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "recipes",
+      "conname": "recipes_author_id_fkey",
+      "def": "FOREIGN KEY (author_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "recipes",
+      "conname": "recipes_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "recipes",
+      "conname": "recipes_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "recipes",
+      "conname": "recipes_status_check",
+      "def": "CHECK ((status = ANY (ARRAY['sugerida'::text, 'aprovada'::text, 'publicada'::text, 'arquivada'::text])))"
+    },
+    {
+      "tabela": "recipes",
+      "conname": "recipes_updated_by_fkey",
+      "def": "FOREIGN KEY (updated_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "schema_migrations",
+      "conname": "schema_migrations_pkey",
+      "def": "PRIMARY KEY (version)"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_food_id_fkey",
+      "def": "FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_linked_marmita_id_fkey",
+      "def": "FOREIGN KEY (linked_marmita_id) REFERENCES marmitas(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_linked_recipe_id_fkey",
+      "def": "FOREIGN KEY (linked_recipe_id) REFERENCES recipes(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_product_id_fkey",
+      "def": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "conname": "shopping_list_items_shopping_list_id_fkey",
+      "def": "FOREIGN KEY (shopping_list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "shopping_lists",
+      "conname": "shopping_lists_created_by_fkey",
+      "def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "shopping_lists",
+      "conname": "shopping_lists_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "shopping_lists",
+      "conname": "shopping_lists_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "storage_buckets",
+      "conname": "storage_buckets_access_check",
+      "def": "CHECK ((access = ANY (ARRAY['private'::text, 'public_read'::text])))"
+    },
+    {
+      "tabela": "storage_buckets",
+      "conname": "storage_buckets_name_key",
+      "def": "UNIQUE (name)"
+    },
+    {
+      "tabela": "storage_buckets",
+      "conname": "storage_buckets_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "storage_files",
+      "conname": "storage_files_pkey",
+      "def": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "storage_files",
+      "conname": "storage_files_uploaded_by_fkey",
+      "def": "FOREIGN KEY (uploaded_by) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "sync_events",
+      "conname": "sync_events_action_check",
+      "def": "CHECK ((action = ANY (ARRAY['insert'::text, 'update'::text, 'delete'::text, 'sync'::text])))"
+    },
+    {
+      "tabela": "sync_events",
+      "conname": "sync_events_kitchen_space_id_fkey",
+      "def": "FOREIGN KEY (kitchen_space_id) REFERENCES kitchen_spaces(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "sync_events",
+      "conname": "sync_events_pkey",
+      "def": "PRIMARY KEY (id)"
+    }
+  ],
+  "policies": [
+    {
+      "tabela": "food_household_conversions",
+      "polname": "food_household_conversions_delete",
+      "cmd": "DELETE",
+      "using_clause": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "food_household_conversions",
+      "polname": "food_household_conversions_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "food_household_conversions",
+      "polname": "food_household_conversions_select",
+      "cmd": "SELECT",
+      "using_clause": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "food_household_conversions",
+      "polname": "food_household_conversions_update",
+      "cmd": "UPDATE",
+      "using_clause": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "food_nutrition_history",
+      "polname": "food_nutrition_history_select",
+      "cmd": "SELECT",
+      "using_clause": "(food_id IN ( SELECT foods.id\n   FROM foods\n  WHERE (foods.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "foods",
+      "polname": "foods_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "foods",
+      "polname": "foods_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "foods",
+      "polname": "foods_select",
+      "cmd": "SELECT",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (deleted_at IS NULL))",
+      "with_check": null
+    },
+    {
+      "tabela": "foods",
+      "polname": "foods_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (is_space_admin(kitchen_space_id) OR (created_by = current_profile_id())))"
+    },
+    {
+      "tabela": "image_analyses",
+      "polname": "image_analyses_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))",
+      "with_check": null
+    },
+    {
+      "tabela": "image_analyses",
+      "polname": "image_analyses_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))"
+    },
+    {
+      "tabela": "image_analyses",
+      "polname": "image_analyses_select",
+      "cmd": "SELECT",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    },
+    {
+      "tabela": "image_analyses",
+      "polname": "image_analyses_update",
+      "cmd": "UPDATE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))"
+    },
+    {
+      "tabela": "kitchen_spaces",
+      "polname": "kitchen_spaces_select",
+      "cmd": "SELECT",
+      "using_clause": "(id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    },
+    {
+      "tabela": "marmita_items",
+      "polname": "marmita_items_delete",
+      "cmd": "DELETE",
+      "using_clause": "(marmita_id IN ( SELECT marmitas.id\n   FROM marmitas\n  WHERE (marmitas.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "marmita_items",
+      "polname": "marmita_items_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(marmita_id IN ( SELECT marmitas.id\n   FROM marmitas\n  WHERE (marmitas.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "marmita_items",
+      "polname": "marmita_items_select",
+      "cmd": "SELECT",
+      "using_clause": "(marmita_id IN ( SELECT marmitas.id\n   FROM marmitas\n  WHERE (marmitas.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "marmita_items",
+      "polname": "marmita_items_update",
+      "cmd": "UPDATE",
+      "using_clause": "(marmita_id IN ( SELECT marmitas.id\n   FROM marmitas\n  WHERE (marmitas.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": "(marmita_id IN ( SELECT marmitas.id\n   FROM marmitas\n  WHERE (marmitas.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "marmitas",
+      "polname": "marmitas_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "marmitas",
+      "polname": "marmitas_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "marmitas",
+      "polname": "marmitas_select",
+      "cmd": "SELECT",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (deleted_at IS NULL))",
+      "with_check": null
+    },
+    {
+      "tabela": "marmitas",
+      "polname": "marmitas_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (is_space_admin(kitchen_space_id) OR ((prepared_by = current_profile_id()) AND (status <> 'publicada'::text))))"
+    },
+    {
+      "tabela": "meal_items",
+      "polname": "meal_items_delete",
+      "cmd": "DELETE",
+      "using_clause": "(meal_id IN ( SELECT meals.id\n   FROM meals\n  WHERE (meals.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "meal_items",
+      "polname": "meal_items_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(meal_id IN ( SELECT meals.id\n   FROM meals\n  WHERE (meals.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "meal_items",
+      "polname": "meal_items_select",
+      "cmd": "SELECT",
+      "using_clause": "(meal_id IN ( SELECT meals.id\n   FROM meals\n  WHERE (meals.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "meal_items",
+      "polname": "meal_items_update",
+      "cmd": "UPDATE",
+      "using_clause": "(meal_id IN ( SELECT meals.id\n   FROM meals\n  WHERE (meals.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": "(meal_id IN ( SELECT meals.id\n   FROM meals\n  WHERE (meals.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "meals",
+      "polname": "meals_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))",
+      "with_check": null
+    },
+    {
+      "tabela": "meals",
+      "polname": "meals_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))"
+    },
+    {
+      "tabela": "meals",
+      "polname": "meals_select",
+      "cmd": "SELECT",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (deleted_at IS NULL))",
+      "with_check": null
+    },
+    {
+      "tabela": "meals",
+      "polname": "meals_update",
+      "cmd": "UPDATE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (user_id = current_profile_id()))"
+    },
+    {
+      "tabela": "memberships",
+      "polname": "memberships_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))"
+    },
+    {
+      "tabela": "memberships",
+      "polname": "memberships_select",
+      "cmd": "SELECT",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    },
+    {
+      "tabela": "order_status_history",
+      "polname": "order_status_history_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(order_id IN ( SELECT orders.id\n   FROM orders\n  WHERE (orders.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "order_status_history",
+      "polname": "order_status_history_select",
+      "cmd": "SELECT",
+      "using_clause": "(order_id IN ( SELECT orders.id\n   FROM orders\n  WHERE (orders.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "orders",
+      "polname": "orders_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "orders",
+      "polname": "orders_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (requester_id = current_profile_id()))"
+    },
+    {
+      "tabela": "orders",
+      "polname": "orders_select",
+      "cmd": "SELECT",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    },
+    {
+      "tabela": "orders",
+      "polname": "orders_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (is_space_admin(kitchen_space_id) OR (requester_id = current_profile_id())))"
+    },
+    {
+      "tabela": "product_nutrition_history",
+      "polname": "product_nutrition_history_select",
+      "cmd": "SELECT",
+      "using_clause": "(product_id IN ( SELECT products.id\n   FROM products\n  WHERE (products.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "products",
+      "polname": "products_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "products",
+      "polname": "products_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "products",
+      "polname": "products_select",
+      "cmd": "SELECT",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (deleted_at IS NULL))",
+      "with_check": null
+    },
+    {
+      "tabela": "products",
+      "polname": "products_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (is_space_admin(kitchen_space_id) OR (created_by = current_profile_id())))"
+    },
+    {
+      "tabela": "profile_sessions",
+      "polname": "profile_sessions_select",
+      "cmd": "SELECT",
+      "using_clause": "(profile_id = current_profile_id())",
+      "with_check": null
+    },
+    {
+      "tabela": "profiles",
+      "polname": "profiles_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM memberships\n  WHERE ((memberships.profile_id = current_profile_id()) AND (memberships.role_in_space = 'admin'::text))))"
+    },
+    {
+      "tabela": "profiles",
+      "polname": "profiles_select",
+      "cmd": "SELECT",
+      "using_clause": "(id IN ( SELECT memberships.profile_id\n   FROM memberships\n  WHERE (memberships.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "profiles",
+      "polname": "profiles_update",
+      "cmd": "UPDATE",
+      "using_clause": "((id = current_profile_id()) OR (EXISTS ( SELECT 1\n   FROM (memberships target\n     JOIN memberships admin_m ON ((admin_m.kitchen_space_id = target.kitchen_space_id)))\n  WHERE ((target.profile_id = profiles.id) AND (admin_m.profile_id = current_profile_id()) AND (admin_m.role_in_space = 'admin'::text)))))",
+      "with_check": "((id = current_profile_id()) OR (EXISTS ( SELECT 1\n   FROM (memberships target\n     JOIN memberships admin_m ON ((admin_m.kitchen_space_id = target.kitchen_space_id)))\n  WHERE ((target.profile_id = profiles.id) AND (admin_m.profile_id = current_profile_id()) AND (admin_m.role_in_space = 'admin'::text)))))"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "polname": "recipe_ingredients_delete",
+      "cmd": "DELETE",
+      "using_clause": "(recipe_id IN ( SELECT recipes.id\n   FROM recipes\n  WHERE (recipes.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "polname": "recipe_ingredients_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(recipe_id IN ( SELECT recipes.id\n   FROM recipes\n  WHERE (recipes.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "polname": "recipe_ingredients_select",
+      "cmd": "SELECT",
+      "using_clause": "(recipe_id IN ( SELECT recipes.id\n   FROM recipes\n  WHERE (recipes.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "polname": "recipe_ingredients_update",
+      "cmd": "UPDATE",
+      "using_clause": "(recipe_id IN ( SELECT recipes.id\n   FROM recipes\n  WHERE (recipes.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": "(recipe_id IN ( SELECT recipes.id\n   FROM recipes\n  WHERE (recipes.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "recipes",
+      "polname": "recipes_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "recipes",
+      "polname": "recipes_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "recipes",
+      "polname": "recipes_select",
+      "cmd": "SELECT",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (deleted_at IS NULL))",
+      "with_check": null
+    },
+    {
+      "tabela": "recipes",
+      "polname": "recipes_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND (is_space_admin(kitchen_space_id) OR (author_id = current_profile_id())))"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "polname": "shopping_list_items_delete",
+      "cmd": "DELETE",
+      "using_clause": "(shopping_list_id IN ( SELECT shopping_lists.id\n   FROM shopping_lists\n  WHERE (shopping_lists.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "shopping_list_items",
+      "polname": "shopping_list_items_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(shopping_list_id IN ( SELECT shopping_lists.id\n   FROM shopping_lists\n  WHERE (shopping_lists.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "shopping_list_items",
+      "polname": "shopping_list_items_select",
+      "cmd": "SELECT",
+      "using_clause": "(shopping_list_id IN ( SELECT shopping_lists.id\n   FROM shopping_lists\n  WHERE (shopping_lists.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": null
+    },
+    {
+      "tabela": "shopping_list_items",
+      "polname": "shopping_list_items_update",
+      "cmd": "UPDATE",
+      "using_clause": "(shopping_list_id IN ( SELECT shopping_lists.id\n   FROM shopping_lists\n  WHERE (shopping_lists.kitchen_space_id = ANY (current_kitchen_space_ids()))))",
+      "with_check": "(shopping_list_id IN ( SELECT shopping_lists.id\n   FROM shopping_lists\n  WHERE (shopping_lists.kitchen_space_id = ANY (current_kitchen_space_ids()))))"
+    },
+    {
+      "tabela": "shopping_lists",
+      "polname": "shopping_lists_delete",
+      "cmd": "DELETE",
+      "using_clause": "((kitchen_space_id = ANY (current_kitchen_space_ids())) AND is_space_admin(kitchen_space_id))",
+      "with_check": null
+    },
+    {
+      "tabela": "shopping_lists",
+      "polname": "shopping_lists_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "shopping_lists",
+      "polname": "shopping_lists_select",
+      "cmd": "SELECT",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    },
+    {
+      "tabela": "shopping_lists",
+      "polname": "shopping_lists_update",
+      "cmd": "UPDATE",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": "(kitchen_space_id = ANY (current_kitchen_space_ids()))"
+    },
+    {
+      "tabela": "storage_buckets",
+      "polname": "storage_buckets_select",
+      "cmd": "SELECT",
+      "using_clause": "true",
+      "with_check": null
+    },
+    {
+      "tabela": "storage_files",
+      "polname": "storage_files_insert",
+      "cmd": "INSERT",
+      "using_clause": null,
+      "with_check": "(uploaded_by = current_profile_id())"
+    },
+    {
+      "tabela": "storage_files",
+      "polname": "storage_files_select",
+      "cmd": "SELECT",
+      "using_clause": "((uploaded_by IS NULL) OR (uploaded_by IN ( SELECT memberships.profile_id\n   FROM memberships\n  WHERE (memberships.kitchen_space_id = ANY (current_kitchen_space_ids())))))",
+      "with_check": null
+    },
+    {
+      "tabela": "sync_events",
+      "polname": "sync_events_select",
+      "cmd": "SELECT",
+      "using_clause": "(kitchen_space_id = ANY (current_kitchen_space_ids()))",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "nome": "calc_food_portion",
+      "retorno": "jsonb",
+      "argumentos": "p_grams numeric, p_calories_100g numeric, p_protein_100g numeric, p_carbs_100g numeric, p_fat_100g numeric, p_fiber_100g numeric, p_sugars_100g numeric DEFAULT NULL::numeric, p_sodium_100g numeric DEFAULT NULL::numeric"
+    },
+    {
+      "nome": "calc_food_portion",
+      "retorno": "jsonb",
+      "argumentos": "p_grams numeric, p_calories_100g numeric"
+    },
+    {
+      "nome": "calc_meal_totals",
+      "retorno": "TABLE(total_calories numeric, total_protein numeric, total_carbs numeric, total_fat numeric, total_fiber numeric)",
+      "argumentos": "p_meal_id uuid"
+    },
+    {
+      "nome": "calc_recipe_ingredient",
+      "retorno": "jsonb",
+      "argumentos": "p_food_id uuid, p_product_id uuid, p_weight_grams numeric"
+    },
+    {
+      "nome": "current_kitchen_space_ids",
+      "retorno": "uuid[]",
+      "argumentos": ""
+    },
+    {
+      "nome": "current_profile_id",
+      "retorno": "uuid",
+      "argumentos": ""
+    },
+    {
+      "nome": "current_profile_role",
+      "retorno": "text",
+      "argumentos": ""
+    },
+    {
+      "nome": "emit_sync_event",
+      "retorno": "void",
+      "argumentos": "p_space_id uuid, p_entity text, p_entity_id uuid, p_action text, p_payload jsonb DEFAULT NULL::jsonb"
+    },
+    {
+      "nome": "is_space_admin",
+      "retorno": "boolean",
+      "argumentos": "space_id uuid"
+    },
+    {
+      "nome": "profile_in_space",
+      "retorno": "boolean",
+      "argumentos": "p_profile_id uuid, p_space_id uuid"
+    },
+    {
+      "nome": "profile_is_space_admin",
+      "retorno": "boolean",
+      "argumentos": "p_profile_id uuid, p_space_id uuid"
+    },
+    {
+      "nome": "recalc_marmita_totals",
+      "retorno": "void",
+      "argumentos": "p_marmita_id uuid"
+    },
+    {
+      "nome": "recalc_meal_totals",
+      "retorno": "void",
+      "argumentos": "p_meal_id uuid"
+    },
+    {
+      "nome": "recalc_recipe_totals",
+      "retorno": "void",
+      "argumentos": "p_recipe_id uuid"
+    },
+    {
+      "nome": "set_updated_at",
+      "retorno": "trigger",
+      "argumentos": ""
+    },
+    {
+      "nome": "trg_food_nutrition_history",
+      "retorno": "trigger",
+      "argumentos": ""
+    },
+    {
+      "nome": "trg_order_status_history",
+      "retorno": "trigger",
+      "argumentos": ""
+    },
+    {
+      "nome": "trg_recalc_marmita_totals",
+      "retorno": "trigger",
+      "argumentos": ""
+    },
+    {
+      "nome": "trg_recalc_meal_totals",
+      "retorno": "trigger",
+      "argumentos": ""
+    },
+    {
+      "nome": "trg_recalc_recipe_totals",
+      "retorno": "trigger",
+      "argumentos": ""
+    }
+  ],
+  "triggers": [
+    {
+      "tabela": "foods",
+      "tgname": "trg_foods_nutrition_history",
+      "def": "CREATE TRIGGER trg_foods_nutrition_history BEFORE UPDATE ON public.foods FOR EACH ROW EXECUTE FUNCTION trg_food_nutrition_history()"
+    },
+    {
+      "tabela": "foods",
+      "tgname": "trg_foods_updated_at",
+      "def": "CREATE TRIGGER trg_foods_updated_at BEFORE UPDATE ON public.foods FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "image_analyses",
+      "tgname": "trg_image_analyses_updated_at",
+      "def": "CREATE TRIGGER trg_image_analyses_updated_at BEFORE UPDATE ON public.image_analyses FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "kitchen_spaces",
+      "tgname": "trg_kitchen_spaces_updated_at",
+      "def": "CREATE TRIGGER trg_kitchen_spaces_updated_at BEFORE UPDATE ON public.kitchen_spaces FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "marmita_items",
+      "tgname": "trg_marmita_items_totals",
+      "def": "CREATE TRIGGER trg_marmita_items_totals AFTER INSERT OR DELETE OR UPDATE ON public.marmita_items FOR EACH ROW EXECUTE FUNCTION trg_recalc_marmita_totals()"
+    },
+    {
+      "tabela": "marmitas",
+      "tgname": "trg_marmitas_updated_at",
+      "def": "CREATE TRIGGER trg_marmitas_updated_at BEFORE UPDATE ON public.marmitas FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "meal_items",
+      "tgname": "trg_meal_items_totals",
+      "def": "CREATE TRIGGER trg_meal_items_totals AFTER INSERT OR DELETE OR UPDATE ON public.meal_items FOR EACH ROW EXECUTE FUNCTION trg_recalc_meal_totals()"
+    },
+    {
+      "tabela": "meals",
+      "tgname": "trg_meals_updated_at",
+      "def": "CREATE TRIGGER trg_meals_updated_at BEFORE UPDATE ON public.meals FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "orders",
+      "tgname": "trg_orders_status_history",
+      "def": "CREATE TRIGGER trg_orders_status_history AFTER INSERT OR UPDATE OF status ON public.orders FOR EACH ROW EXECUTE FUNCTION trg_order_status_history()"
+    },
+    {
+      "tabela": "orders",
+      "tgname": "trg_orders_updated_at",
+      "def": "CREATE TRIGGER trg_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "products",
+      "tgname": "trg_products_updated_at",
+      "def": "CREATE TRIGGER trg_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "profiles",
+      "tgname": "trg_profiles_updated_at",
+      "def": "CREATE TRIGGER trg_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "tgname": "trg_recipe_ingredients_totals",
+      "def": "CREATE TRIGGER trg_recipe_ingredients_totals AFTER INSERT OR DELETE OR UPDATE ON public.recipe_ingredients FOR EACH ROW EXECUTE FUNCTION trg_recalc_recipe_totals()"
+    },
+    {
+      "tabela": "recipe_ingredients",
+      "tgname": "trg_recipe_ingredients_updated_at",
+      "def": "CREATE TRIGGER trg_recipe_ingredients_updated_at BEFORE UPDATE ON public.recipe_ingredients FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "recipes",
+      "tgname": "trg_recipes_updated_at",
+      "def": "CREATE TRIGGER trg_recipes_updated_at BEFORE UPDATE ON public.recipes FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    },
+    {
+      "tabela": "shopping_lists",
+      "tgname": "trg_shopping_lists_updated_at",
+      "def": "CREATE TRIGGER trg_shopping_lists_updated_at BEFORE UPDATE ON public.shopping_lists FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "app_state",
+      "indexname": "app_state_pkey",
+      "indexdef": "CREATE UNIQUE INDEX app_state_pkey ON public.app_state USING btree (id)"
+    },
+    {
+      "tablename": "app_state",
+      "indexname": "app_state_updated_at_idx",
+      "indexdef": "CREATE INDEX app_state_updated_at_idx ON public.app_state USING btree (updated_at DESC)"
+    },
+    {
+      "tablename": "food_household_conversions",
+      "indexname": "food_household_conversions_food_id_household_measure_id_key",
+      "indexdef": "CREATE UNIQUE INDEX food_household_conversions_food_id_household_measure_id_key ON public.food_household_conversions USING btree (food_id, household_measure_id)"
+    },
+    {
+      "tablename": "food_household_conversions",
+      "indexname": "food_household_conversions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX food_household_conversions_pkey ON public.food_household_conversions USING btree (id)"
+    },
+    {
+      "tablename": "food_household_conversions",
+      "indexname": "idx_food_household_conversions_food",
+      "indexdef": "CREATE INDEX idx_food_household_conversions_food ON public.food_household_conversions USING btree (food_id)"
+    },
+    {
+      "tablename": "food_household_conversions",
+      "indexname": "idx_food_household_conversions_measure",
+      "indexdef": "CREATE INDEX idx_food_household_conversions_measure ON public.food_household_conversions USING btree (household_measure_id)"
+    },
+    {
+      "tablename": "food_nutrition_history",
+      "indexname": "food_nutrition_history_pkey",
+      "indexdef": "CREATE UNIQUE INDEX food_nutrition_history_pkey ON public.food_nutrition_history USING btree (id)"
+    },
+    {
+      "tablename": "food_nutrition_history",
+      "indexname": "idx_food_nutrition_history_changed_at",
+      "indexdef": "CREATE INDEX idx_food_nutrition_history_changed_at ON public.food_nutrition_history USING btree (changed_at DESC)"
+    },
+    {
+      "tablename": "food_nutrition_history",
+      "indexname": "idx_food_nutrition_history_food",
+      "indexdef": "CREATE INDEX idx_food_nutrition_history_food ON public.food_nutrition_history USING btree (food_id)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "foods_pkey",
+      "indexdef": "CREATE UNIQUE INDEX foods_pkey ON public.foods USING btree (id)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_category",
+      "indexdef": "CREATE INDEX idx_foods_category ON public.foods USING btree (category)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_created_by",
+      "indexdef": "CREATE INDEX idx_foods_created_by ON public.foods USING btree (created_by)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_deleted_at",
+      "indexdef": "CREATE INDEX idx_foods_deleted_at ON public.foods USING btree (deleted_at)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_name",
+      "indexdef": "CREATE INDEX idx_foods_name ON public.foods USING btree (name)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_space",
+      "indexdef": "CREATE INDEX idx_foods_space ON public.foods USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "idx_foods_unique_name_space",
+      "indexdef": "CREATE UNIQUE INDEX idx_foods_unique_name_space ON public.foods USING btree (kitchen_space_id, lower(name)) WHERE (deleted_at IS NULL)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "uq_foods_dedupe",
+      "indexdef": "CREATE UNIQUE INDEX uq_foods_dedupe ON public.foods USING btree (kitchen_space_id, lower(btrim(name)), prep_state, lower(btrim(COALESCE(brand, ''::text)))) WHERE (deleted_at IS NULL)"
+    },
+    {
+      "tablename": "foods",
+      "indexname": "uq_foods_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_foods_external ON public.foods USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "household_measures",
+      "indexname": "household_measures_pkey",
+      "indexdef": "CREATE UNIQUE INDEX household_measures_pkey ON public.household_measures USING btree (id)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "idx_image_analyses_analysis_date",
+      "indexdef": "CREATE INDEX idx_image_analyses_analysis_date ON public.image_analyses USING btree (analysis_date DESC)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "idx_image_analyses_meal",
+      "indexdef": "CREATE INDEX idx_image_analyses_meal ON public.image_analyses USING btree (meal_id)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "idx_image_analyses_space",
+      "indexdef": "CREATE INDEX idx_image_analyses_space ON public.image_analyses USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "idx_image_analyses_status",
+      "indexdef": "CREATE INDEX idx_image_analyses_status ON public.image_analyses USING btree (status)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "idx_image_analyses_user",
+      "indexdef": "CREATE INDEX idx_image_analyses_user ON public.image_analyses USING btree (user_id)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "image_analyses_pkey",
+      "indexdef": "CREATE UNIQUE INDEX image_analyses_pkey ON public.image_analyses USING btree (id)"
+    },
+    {
+      "tablename": "image_analyses",
+      "indexname": "uq_image_analyses_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_image_analyses_external ON public.image_analyses USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "kitchen_spaces",
+      "indexname": "kitchen_spaces_pkey",
+      "indexdef": "CREATE UNIQUE INDEX kitchen_spaces_pkey ON public.kitchen_spaces USING btree (id)"
+    },
+    {
+      "tablename": "kitchen_spaces",
+      "indexname": "kitchen_spaces_slug_key",
+      "indexdef": "CREATE UNIQUE INDEX kitchen_spaces_slug_key ON public.kitchen_spaces USING btree (slug)"
+    },
+    {
+      "tablename": "marmita_items",
+      "indexname": "idx_marmita_items_food",
+      "indexdef": "CREATE INDEX idx_marmita_items_food ON public.marmita_items USING btree (food_id)"
+    },
+    {
+      "tablename": "marmita_items",
+      "indexname": "idx_marmita_items_marmita",
+      "indexdef": "CREATE INDEX idx_marmita_items_marmita ON public.marmita_items USING btree (marmita_id)"
+    },
+    {
+      "tablename": "marmita_items",
+      "indexname": "marmita_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX marmita_items_pkey ON public.marmita_items USING btree (id)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_deleted_at",
+      "indexdef": "CREATE INDEX idx_marmitas_deleted_at ON public.marmitas USING btree (deleted_at)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_prep_date",
+      "indexdef": "CREATE INDEX idx_marmitas_prep_date ON public.marmitas USING btree (prep_date)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_prepared_by",
+      "indexdef": "CREATE INDEX idx_marmitas_prepared_by ON public.marmitas USING btree (prepared_by)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_recipient",
+      "indexdef": "CREATE INDEX idx_marmitas_recipient ON public.marmitas USING btree (recipient_id)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_space",
+      "indexdef": "CREATE INDEX idx_marmitas_space ON public.marmitas USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "idx_marmitas_status",
+      "indexdef": "CREATE INDEX idx_marmitas_status ON public.marmitas USING btree (status)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "marmitas_pkey",
+      "indexdef": "CREATE UNIQUE INDEX marmitas_pkey ON public.marmitas USING btree (id)"
+    },
+    {
+      "tablename": "marmitas",
+      "indexname": "uq_marmitas_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_marmitas_external ON public.marmitas USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "meal_items",
+      "indexname": "idx_meal_items_food",
+      "indexdef": "CREATE INDEX idx_meal_items_food ON public.meal_items USING btree (food_id)"
+    },
+    {
+      "tablename": "meal_items",
+      "indexname": "idx_meal_items_meal",
+      "indexdef": "CREATE INDEX idx_meal_items_meal ON public.meal_items USING btree (meal_id)"
+    },
+    {
+      "tablename": "meal_items",
+      "indexname": "idx_meal_items_product",
+      "indexdef": "CREATE INDEX idx_meal_items_product ON public.meal_items USING btree (product_id)"
+    },
+    {
+      "tablename": "meal_items",
+      "indexname": "meal_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX meal_items_pkey ON public.meal_items USING btree (id)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "idx_meals_date",
+      "indexdef": "CREATE INDEX idx_meals_date ON public.meals USING btree (meal_date)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "idx_meals_deleted_at",
+      "indexdef": "CREATE INDEX idx_meals_deleted_at ON public.meals USING btree (deleted_at)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "idx_meals_meal_type",
+      "indexdef": "CREATE INDEX idx_meals_meal_type ON public.meals USING btree (meal_type)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "idx_meals_space",
+      "indexdef": "CREATE INDEX idx_meals_space ON public.meals USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "idx_meals_user",
+      "indexdef": "CREATE INDEX idx_meals_user ON public.meals USING btree (user_id)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "meals_pkey",
+      "indexdef": "CREATE UNIQUE INDEX meals_pkey ON public.meals USING btree (id)"
+    },
+    {
+      "tablename": "meals",
+      "indexname": "uq_meals_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_meals_external ON public.meals USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "memberships",
+      "indexname": "idx_memberships_profile",
+      "indexdef": "CREATE INDEX idx_memberships_profile ON public.memberships USING btree (profile_id)"
+    },
+    {
+      "tablename": "memberships",
+      "indexname": "idx_memberships_space",
+      "indexdef": "CREATE INDEX idx_memberships_space ON public.memberships USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "memberships",
+      "indexname": "memberships_kitchen_space_id_profile_id_key",
+      "indexdef": "CREATE UNIQUE INDEX memberships_kitchen_space_id_profile_id_key ON public.memberships USING btree (kitchen_space_id, profile_id)"
+    },
+    {
+      "tablename": "memberships",
+      "indexname": "memberships_pkey",
+      "indexdef": "CREATE UNIQUE INDEX memberships_pkey ON public.memberships USING btree (id)"
+    },
+    {
+      "tablename": "order_status_history",
+      "indexname": "idx_order_status_history_changed_at",
+      "indexdef": "CREATE INDEX idx_order_status_history_changed_at ON public.order_status_history USING btree (changed_at DESC)"
+    },
+    {
+      "tablename": "order_status_history",
+      "indexname": "idx_order_status_history_order",
+      "indexdef": "CREATE INDEX idx_order_status_history_order ON public.order_status_history USING btree (order_id)"
+    },
+    {
+      "tablename": "order_status_history",
+      "indexname": "order_status_history_pkey",
+      "indexdef": "CREATE UNIQUE INDEX order_status_history_pkey ON public.order_status_history USING btree (id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_created_at",
+      "indexdef": "CREATE INDEX idx_orders_created_at ON public.orders USING btree (created_at DESC)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_requester",
+      "indexdef": "CREATE INDEX idx_orders_requester ON public.orders USING btree (requester_id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_space",
+      "indexdef": "CREATE INDEX idx_orders_space ON public.orders USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "idx_orders_status",
+      "indexdef": "CREATE INDEX idx_orders_status ON public.orders USING btree (status)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "orders_pkey",
+      "indexdef": "CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)"
+    },
+    {
+      "tablename": "orders",
+      "indexname": "uq_orders_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_orders_external ON public.orders USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "product_nutrition_history",
+      "indexname": "idx_product_nutrition_history_changed_at",
+      "indexdef": "CREATE INDEX idx_product_nutrition_history_changed_at ON public.product_nutrition_history USING btree (changed_at DESC)"
+    },
+    {
+      "tablename": "product_nutrition_history",
+      "indexname": "idx_product_nutrition_history_product",
+      "indexdef": "CREATE INDEX idx_product_nutrition_history_product ON public.product_nutrition_history USING btree (product_id)"
+    },
+    {
+      "tablename": "product_nutrition_history",
+      "indexname": "product_nutrition_history_pkey",
+      "indexdef": "CREATE UNIQUE INDEX product_nutrition_history_pkey ON public.product_nutrition_history USING btree (id)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_barcode",
+      "indexdef": "CREATE INDEX idx_products_barcode ON public.products USING btree (barcode)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_created_by",
+      "indexdef": "CREATE INDEX idx_products_created_by ON public.products USING btree (created_by)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_deleted_at",
+      "indexdef": "CREATE INDEX idx_products_deleted_at ON public.products USING btree (deleted_at)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "idx_products_space",
+      "indexdef": "CREATE INDEX idx_products_space ON public.products USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "products_barcode_key",
+      "indexdef": "CREATE UNIQUE INDEX products_barcode_key ON public.products USING btree (barcode)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "products_pkey",
+      "indexdef": "CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)"
+    },
+    {
+      "tablename": "products",
+      "indexname": "uq_products_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_products_external ON public.products USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "profile_sessions",
+      "indexname": "idx_profile_sessions_expires",
+      "indexdef": "CREATE INDEX idx_profile_sessions_expires ON public.profile_sessions USING btree (expires_at)"
+    },
+    {
+      "tablename": "profile_sessions",
+      "indexname": "idx_profile_sessions_profile",
+      "indexdef": "CREATE INDEX idx_profile_sessions_profile ON public.profile_sessions USING btree (profile_id)"
+    },
+    {
+      "tablename": "profile_sessions",
+      "indexname": "profile_sessions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX profile_sessions_pkey ON public.profile_sessions USING btree (id)"
+    },
+    {
+      "tablename": "profile_sessions",
+      "indexname": "profile_sessions_token_hash_key",
+      "indexdef": "CREATE UNIQUE INDEX profile_sessions_token_hash_key ON public.profile_sessions USING btree (token_hash)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "idx_profiles_auth_user",
+      "indexdef": "CREATE INDEX idx_profiles_auth_user ON public.profiles USING btree (auth_user_id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "idx_profiles_email",
+      "indexdef": "CREATE INDEX idx_profiles_email ON public.profiles USING btree (email)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_auth_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX profiles_auth_user_id_key ON public.profiles USING btree (auth_user_id)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_email_key",
+      "indexdef": "CREATE UNIQUE INDEX profiles_email_key ON public.profiles USING btree (email)"
+    },
+    {
+      "tablename": "profiles",
+      "indexname": "profiles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+    },
+    {
+      "tablename": "recipe_ingredients",
+      "indexname": "idx_recipe_ingredients_food",
+      "indexdef": "CREATE INDEX idx_recipe_ingredients_food ON public.recipe_ingredients USING btree (food_id)"
+    },
+    {
+      "tablename": "recipe_ingredients",
+      "indexname": "idx_recipe_ingredients_product",
+      "indexdef": "CREATE INDEX idx_recipe_ingredients_product ON public.recipe_ingredients USING btree (product_id)"
+    },
+    {
+      "tablename": "recipe_ingredients",
+      "indexname": "idx_recipe_ingredients_recipe",
+      "indexdef": "CREATE INDEX idx_recipe_ingredients_recipe ON public.recipe_ingredients USING btree (recipe_id)"
+    },
+    {
+      "tablename": "recipe_ingredients",
+      "indexname": "recipe_ingredients_pkey",
+      "indexdef": "CREATE UNIQUE INDEX recipe_ingredients_pkey ON public.recipe_ingredients USING btree (id)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "idx_recipes_author",
+      "indexdef": "CREATE INDEX idx_recipes_author ON public.recipes USING btree (author_id)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "idx_recipes_deleted_at",
+      "indexdef": "CREATE INDEX idx_recipes_deleted_at ON public.recipes USING btree (deleted_at)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "idx_recipes_space",
+      "indexdef": "CREATE INDEX idx_recipes_space ON public.recipes USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "idx_recipes_status",
+      "indexdef": "CREATE INDEX idx_recipes_status ON public.recipes USING btree (status)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "recipes_pkey",
+      "indexdef": "CREATE UNIQUE INDEX recipes_pkey ON public.recipes USING btree (id)"
+    },
+    {
+      "tablename": "recipes",
+      "indexname": "uq_recipes_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_recipes_external ON public.recipes USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "schema_migrations",
+      "indexname": "schema_migrations_pkey",
+      "indexdef": "CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (version)"
+    },
+    {
+      "tablename": "shopping_list_items",
+      "indexname": "idx_shopping_list_items_food",
+      "indexdef": "CREATE INDEX idx_shopping_list_items_food ON public.shopping_list_items USING btree (food_id)"
+    },
+    {
+      "tablename": "shopping_list_items",
+      "indexname": "idx_shopping_list_items_list",
+      "indexdef": "CREATE INDEX idx_shopping_list_items_list ON public.shopping_list_items USING btree (shopping_list_id)"
+    },
+    {
+      "tablename": "shopping_list_items",
+      "indexname": "idx_shopping_list_items_product",
+      "indexdef": "CREATE INDEX idx_shopping_list_items_product ON public.shopping_list_items USING btree (product_id)"
+    },
+    {
+      "tablename": "shopping_list_items",
+      "indexname": "idx_shopping_list_items_purchased",
+      "indexdef": "CREATE INDEX idx_shopping_list_items_purchased ON public.shopping_list_items USING btree (is_purchased)"
+    },
+    {
+      "tablename": "shopping_list_items",
+      "indexname": "shopping_list_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX shopping_list_items_pkey ON public.shopping_list_items USING btree (id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "idx_shopping_lists_created_by",
+      "indexdef": "CREATE INDEX idx_shopping_lists_created_by ON public.shopping_lists USING btree (created_by)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "idx_shopping_lists_space",
+      "indexdef": "CREATE INDEX idx_shopping_lists_space ON public.shopping_lists USING btree (kitchen_space_id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "shopping_lists_pkey",
+      "indexdef": "CREATE UNIQUE INDEX shopping_lists_pkey ON public.shopping_lists USING btree (id)"
+    },
+    {
+      "tablename": "shopping_lists",
+      "indexname": "uq_shopping_lists_external",
+      "indexdef": "CREATE UNIQUE INDEX uq_shopping_lists_external ON public.shopping_lists USING btree (kitchen_space_id, external_id) WHERE (external_id IS NOT NULL)"
+    },
+    {
+      "tablename": "storage_buckets",
+      "indexname": "storage_buckets_name_key",
+      "indexdef": "CREATE UNIQUE INDEX storage_buckets_name_key ON public.storage_buckets USING btree (name)"
+    },
+    {
+      "tablename": "storage_buckets",
+      "indexname": "storage_buckets_pkey",
+      "indexdef": "CREATE UNIQUE INDEX storage_buckets_pkey ON public.storage_buckets USING btree (id)"
+    },
+    {
+      "tablename": "storage_files",
+      "indexname": "idx_storage_files_bucket_path",
+      "indexdef": "CREATE INDEX idx_storage_files_bucket_path ON public.storage_files USING btree (bucket, file_path)"
+    },
+    {
+      "tablename": "storage_files",
+      "indexname": "idx_storage_files_uploaded_by",
+      "indexdef": "CREATE INDEX idx_storage_files_uploaded_by ON public.storage_files USING btree (uploaded_by)"
+    },
+    {
+      "tablename": "storage_files",
+      "indexname": "storage_files_pkey",
+      "indexdef": "CREATE UNIQUE INDEX storage_files_pkey ON public.storage_files USING btree (id)"
+    },
+    {
+      "tablename": "sync_events",
+      "indexname": "idx_sync_events_space_id",
+      "indexdef": "CREATE INDEX idx_sync_events_space_id ON public.sync_events USING btree (kitchen_space_id, id DESC)"
+    },
+    {
+      "tablename": "sync_events",
+      "indexname": "sync_events_pkey",
+      "indexdef": "CREATE UNIQUE INDEX sync_events_pkey ON public.sync_events USING btree (id)"
+    }
+  ],
+  "views": [],
+  "spaces": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Nossa Cozinha",
+      "slug": "nossa-cozinha"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Lívia",
+      "email": "livia@ourlittlekitchen.app",
+      "role": "admin"
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Mariana",
+      "email": "mariana@ourlittlekitchen.app",
+      "role": "user"
+    }
+  ],
+  "memberships": [
+    {
+      "kitchen_space_id": "11111111-1111-1111-1111-111111111111",
+      "profile_id": "22222222-2222-2222-2222-222222222222",
+      "role_in_space": "admin"
+    },
+    {
+      "kitchen_space_id": "11111111-1111-1111-1111-111111111111",
+      "profile_id": "33333333-3333-3333-3333-333333333333",
+      "role_in_space": "member"
+    }
+  ],
+  "householdMeasures": 10
+}

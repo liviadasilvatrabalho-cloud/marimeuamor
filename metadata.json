@@ -1,0 +1,6 @@
+{
+  "name": "Our Little Kitchen",
+  "description": "Aplicativo pessoal e privado para a Mari: reconhecimento alimentar por IA, cálculo nutricional TACO/TBCA, scanner de código de barras, modo Sem Balança, marmitas e receitas com carinho. 💜",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

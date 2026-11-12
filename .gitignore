@@ -1,0 +1,11 @@
+node_modules/
+build/
+dist/
+coverage/
+data/uploads/
+.DS_Store
+*.log
+.env*
+!.env.example
+.neon
+opencode.jsonc
