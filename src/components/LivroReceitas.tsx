@@ -44,7 +44,6 @@ export const LivroReceitas: React.FC<LivroReceitasProps> = ({
 
   // AI Assistant modal state (structured form generator)
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [aiMode, setAiMode] = useState<'create' | 'substitute'>('create');
   const [aiIngredients, setAiIngredients] = useState('');
   const [aiQuestion, setAiQuestion] = useState('');

@@ -239,7 +239,8 @@ export const MobileTabBar: React.FC<
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#100C16]/95 backdrop-blur-lg border-t border-[#33263F] px-1 py-1 pb-safe shadow-2xl">
       <div className="grid grid-cols-3 items-center justify-around max-w-md mx-auto">
-        
+        {/* Tab 1: Meu Dia */}
+        <button
           onClick={() => onSelectTab('meu-dia')}
           className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
             activeTab === 'meu-dia' ? 'text-[#A78BFA]' : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
@@ -248,17 +249,6 @@ export const MobileTabBar: React.FC<
           <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[10px] font-medium tracking-tight mt-0.5">Meu Dia</span>
         </button>
-
-        {/* Tab 2: Sem Balança */}
-        <button
-          onClick={() => onSelectTab('sem-balanca')}
-          className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
-            activeTab === 'sem-balanca' ? 'text-[#A78BFA]' : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
-          }`}
-        >
-          <Scale className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-0.5">Sem Balança</span>
-        </button>*/
 
         {/* Center Floating Action: Fotografar com IA */}
         <div className="flex items-center justify-center -mt-4">
@@ -280,19 +270,6 @@ export const MobileTabBar: React.FC<
         >
           <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[10px] font-medium tracking-tight mt-0.5">Receitas</span>
-        </button>
-
-        {/* Tab 5: Mais (Menu completo) */}
-        <button
-          onClick={onOpenMenu}
-          className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
-            ['calculadora', 'planejamento', 'historico', 'barcode', 'marmitas', 'perfil'].includes(activeTab)
-              ? 'text-[#EC4899]'
-              : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
-          }`}
-        >
-          <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-0.5">Mais</span>
         </button>
       </div>
     </div>
