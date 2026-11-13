@@ -58,13 +58,13 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
         >
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-tr from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] p-0.5 flex items-center justify-center shadow-lg shadow-[#8B5CF6]/20 shrink-0">
             <div className="w-full h-full rounded-full bg-[#100C16] flex items-center justify-center">
-              <span className="text-[11px] sm:text-xs font-bold text-[#A78BFA]">OLK</span>
+              <span className="text-[11px] sm:text-xs font-bold text-[#A78BFA]">MA</span>
             </div>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1 sm:gap-1.5">
               <span className="font-heading text-sm sm:text-lg font-bold tracking-tight text-[#F8F5FC] group-hover:text-[#A78BFA] transition-colors truncate">
-                Our Little Kitchen
+                Mari amore
               </span>
               <span className="text-xs text-[#EC4899] shrink-0">💜</span>
             </div>
@@ -391,11 +391,11 @@ export const MobileMenuDrawer: React.FC<{
         <div className="flex items-center justify-between pb-3 border-b border-[#33263F]">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-[#6D28D9] to-[#EC4899] flex items-center justify-center text-white text-xs font-bold">
-              OLK
+              MA
             </div>
             <div>
               <h2 className="text-sm font-bold text-[#F8F5FC]">
-                Todas as Seções 💜
+                Mari amore 💜
               </h2>
               <p className="text-[10px] text-[#B8AFC4]">
                 Navegação rápida do aplicativo da Mari
@@ -478,7 +478,7 @@ export const MobileMenuDrawer: React.FC<{
 
         <div className="text-center pt-2 pb-1">
           <p className="text-[10px] text-[#B8AFC4]/60">
-            Our Little Kitchen · Feito com carinho para a Mari 💜🌸
+            Mari amore · Feito com carinho para a Mari 💜🌸
           </p>
         </div>
       </div>

@@ -3286,7 +3286,7 @@ app.get("/api/health", async (req, res) => {
   const database = await getDatabaseStatus();
   res.status(database.connected ? 200 : 503).json({
     status: database.connected ? "ok" : "degraded",
-    appName: "Our Little Kitchen",
+    appName: "Mari amore",
     user: "Mari",
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
     database
@@ -3962,7 +3962,7 @@ Responda em formato JSON:
     } else {
       prompt = `
 Mariana tem os seguintes ingredientes na cozinha: "${ingredients}".
-Crie 1 receita saud\xE1vel, deliciosa e pr\xE1tica para ela ("Our Little Kitchen").
+Crie 1 receita saud\xE1vel, deliciosa e pr\xE1tica para ela ("Mari amore").
 Calcule com precis\xE3o calorias e macronutrientes por por\xE7\xE3o.
 Responda em formato JSON:
 {
@@ -4671,7 +4671,7 @@ async function startServer() {
     });
   }
   const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\u{1F49C} Our Little Kitchen server rodando em https://localhost:${PORT}`);
+    console.log(`\u{1F49C} Mari amore server rodando em https://localhost:${PORT}`);
   });
   const shutdown = async () => {
     server.close();

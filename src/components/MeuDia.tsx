@@ -432,18 +432,31 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
       {/* REFEIÇÕES DO DIA (SLOTS)                                    */}
       {/* ============================================================ */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-sm font-bold text-[#FAF8FC]">
-            Refeições do Dia ({slots.length} horários)
-          </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-[#FAF8FC] tracking-tight">
+                {formattedDateInfo.isToday ? 'Refeições de Hoje 🌸' : 'Refeições do Dia 🌸'}
+              </h3>
+              <span className="px-2 py-0.5 rounded-full bg-[#8B5CF6]/15 border border-[#8B5CF6]/30 text-[10px] font-bold text-[#A78BFA]">
+                {slots.length} horários
+              </span>
+            </div>
+            <p className="text-[11px] text-[#B5A8C8]">
+              {dateMeals.length === 0
+                ? 'Sem refeições registradas ainda nesta data'
+                : `${dateMeals.length} refeição(ões) anotada(s)`}
+            </p>
+          </div>
+
           {onNavigateToMeusAlimentos && (
             <button
               type="button"
               onClick={onNavigateToMeusAlimentos}
-              className="text-xs font-semibold text-[#A78BFA] hover:text-[#EC4899] flex items-center gap-1 transition-colors cursor-pointer"
+              className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#322046] hover:border-[#8B5CF6] text-xs font-semibold text-[#A78BFA] hover:text-[#EC4899] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
             >
-              <Apple className="w-3.5 h-3.5" />
-              <span>Ver Meus Alimentos Salvos</span>
+              <Apple className="w-3.5 h-3.5 text-[#EC4899]" />
+              <span>Meus Alimentos Salvos</span>
             </button>
           )}
         </div>
@@ -455,31 +468,42 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
           const slotConsumedCals = slotConsumed.reduce((acc, m) => acc + (m.totalCalories || 0), 0);
           const slotPlannedCals = slotPlanned.reduce((acc, m) => acc + (m.totalCalories || 0), 0);
 
+          const isEmpty = slotConsumed.length === 0 && slotPlanned.length === 0;
+
           return (
             <div
               key={slot.id}
-              className="rounded-3xl bg-[#140E1B] border border-[#322046] overflow-hidden shadow-md"
+              className="rounded-3xl bg-[#140E1B] border border-[#2D1B3E] hover:border-[#8B5CF6]/40 transition-all overflow-hidden shadow-lg shadow-black/20"
             >
               {/* Header do Slot */}
-              <div className="p-3.5 sm:p-4 bg-[#181022] border-b border-[#2D1B3E] flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-lg sm:text-xl shrink-0">{slot.icon}</span>
+              <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#181022] to-[#140E1B] border-b border-[#2D1B3E] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-[#1F142B] border border-[#3A2452] flex items-center justify-center text-xl shadow-inner shrink-0">
+                    {slot.icon}
+                  </div>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-[#FAF8FC] truncate">
+                    <h4 className="text-sm sm:text-base font-bold text-[#FAF8FC] truncate">
                       {slot.label}
                     </h4>
-                    <p className="text-[11px] text-[#B5A8C8] truncate">{slot.timeHint}</p>
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#B5A8C8]">
+                      <Clock className="w-3 h-3 text-[#A78BFA]" />
+                      <span>{slot.timeHint}</span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {slotConsumedCals > 0 && (
-                    <span className="px-2.5 py-1 rounded-xl bg-pink-500/15 border border-pink-500/30 text-xs font-bold text-[#EC4899] font-mono-numbers">
+                  {slotConsumedCals > 0 ? (
+                    <span className="px-3 py-1 rounded-xl bg-pink-500/15 border border-pink-500/30 text-xs font-bold text-[#EC4899] font-mono-numbers">
                       {formatPtBr(slotConsumedCals)} kcal
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-xl bg-[#1A1224] border border-[#322046] text-[10px] font-semibold text-[#7B6E8F] font-mono-numbers">
+                      0 kcal
                     </span>
                   )}
                   {slotPlannedCals > 0 && (
-                    <span className="px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-[10px] font-bold text-[#C084FC]">
+                    <span className="px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-500/30 text-[10px] font-bold text-[#C084FC]">
                       +{formatPtBr(slotPlannedCals)} planejado
                     </span>
                   )}
@@ -646,43 +670,79 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                   </div>
                 ))}
 
-                {/* Estado Vazio do Slot */}
-                {slotConsumed.length === 0 && slotPlanned.length === 0 && (
-                  <p className="text-xs text-[#7B6E8F] text-center py-2">
-                    Nenhum alimento registrado ou planejado neste horário.
-                  </p>
+                {/* ESTADO VAZIO: DESIGN DELICADO E PERFEITO PARA A MARI */}
+                {isEmpty ? (
+                  <div className="py-6 px-4 text-center rounded-2xl bg-[#181022]/60 border border-dashed border-[#2D1B3E] space-y-3.5">
+                    <div className="w-10 h-10 rounded-full bg-[#1F142B] border border-[#3A2452] flex items-center justify-center mx-auto text-[#A78BFA]">
+                      <Utensils className="w-5 h-5 text-[#C084FC]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-[#FAF8FC]">
+                        Nenhum alimento registrado ainda neste horário.
+                      </p>
+                      <p className="text-[11px] text-[#7B6E8F] mt-0.5">
+                        Escolha um alimento salvo ou planeje sua refeição com carinho 💜
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 max-w-sm mx-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFoodPickerSlot({ mealType: slot.id, isPlanned: false });
+                          setSelectedFoodToInsert(null);
+                          setPickerSearch('');
+                        }}
+                        className="flex-1 min-w-[140px] flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#7C3AED] via-[#8B5CF6] to-[#EC4899] hover:brightness-110 text-white text-xs font-bold shadow-lg shadow-[#7C3AED]/25 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Adicionar Alimento</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFoodPickerSlot({ mealType: slot.id, isPlanned: true });
+                          setSelectedFoodToInsert(null);
+                          setPickerSearch('');
+                        }}
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#8B5CF6]/50 hover:border-[#EC4899] text-xs font-semibold text-[#C084FC] active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-[#EC4899]" />
+                        <span>Planejar</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Botões de Ação quando o slot já contém alimentos */
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#2D1B3E]/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFoodPickerSlot({ mealType: slot.id, isPlanned: false });
+                        setSelectedFoodToInsert(null);
+                        setPickerSearch('');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#322046] hover:border-[#8B5CF6] text-xs font-semibold text-[#FAF8FC] transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-[#A78BFA]" />
+                      <span>+ Adicionar Alimento</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFoodPickerSlot({ mealType: slot.id, isPlanned: true });
+                        setSelectedFoodToInsert(null);
+                        setPickerSearch('');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#322046] hover:border-[#EC4899] text-xs font-semibold text-[#C084FC] transition-colors cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#EC4899]" />
+                      <span>+ Planejar</span>
+                    </button>
+                  </div>
                 )}
-
-                {/* Botões de Ação do Slot */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#2D1B3E]/60">
-                  {/* Botão: Adicionar Alimento da Biblioteca */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFoodPickerSlot({ mealType: slot.id, isPlanned: false });
-                      setSelectedFoodToInsert(null);
-                      setPickerSearch('');
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#322046] hover:border-[#8B5CF6] text-xs font-semibold text-[#FAF8FC] transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-[#A78BFA]" />
-                    <span>+ Adicionar Alimento</span>
-                  </button>
-
-                  {/* Botão: Planejar Refeição Futura */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFoodPickerSlot({ mealType: slot.id, isPlanned: true });
-                      setSelectedFoodToInsert(null);
-                      setPickerSearch('');
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1224] hover:bg-[#20152B] border border-[#322046] hover:border-[#EC4899] text-xs font-semibold text-[#C084FC] transition-colors cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#EC4899]" />
-                    <span>+ Planejar</span>
-                  </button>
-                </div>
               </div>
             </div>
           );

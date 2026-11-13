@@ -89,7 +89,7 @@ export default function App() {
         <div className="text-center space-y-3">
           <div className="w-12 h-12 rounded-full border-2 border-[#8B5CF6] border-t-transparent animate-spin mx-auto" />
           <p className="text-xs font-semibold text-[#A78BFA] tracking-wide">
-            Carregando Our Little Kitchen... 💜
+            Carregando Mari amore... 💜
           </p>
         </div>
       </div>

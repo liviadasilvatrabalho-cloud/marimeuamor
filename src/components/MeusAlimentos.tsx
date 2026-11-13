@@ -12,7 +12,6 @@ import {
   Scale,
   Calendar,
   Flame,
-  ArrowUpDown,
   Utensils,
   Sparkles,
   Camera,
@@ -355,16 +354,16 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
         </div>
       </div>
 
-      {/* Search and Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-2.5 p-2 rounded-2xl bg-[#140E1B] border border-[#322046]/70 shadow-sm">
-        <div className="relative flex-1 w-full">
+      {/* Search Bar */}
+      <div className="p-2 rounded-2xl bg-[#140E1B] border border-[#322046]/70 shadow-sm">
+        <div className="relative w-full">
           <Search className="w-4 h-4 text-[#B5A8C8] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Pesquisar alimento por nome ou marca..."
-            className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#1A1224] border border-[#322046] text-xs text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none focus:border-[#8B5CF6]"
+            className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-[#1A1224] border border-[#322046] text-xs text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none focus:border-[#8B5CF6] transition-colors"
           />
           {searchTerm && (
             <button
@@ -374,20 +373,6 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
               <X className="w-3.5 h-3.5" />
             </button>
           )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#1A1224] border border-[#322046] text-xs text-[#B5A8C8]">
-            <ArrowUpDown className="w-3.5 h-3.5 text-[#A78BFA]" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-transparent text-xs font-medium text-[#FAF8FC] focus:outline-none cursor-pointer"
-            >
-              <option value="recent" className="bg-[#1A1224] text-white">Mais Recentes</option>
-              <option value="az" className="bg-[#1A1224] text-white">Ordem Alfabética (A-Z)</option>
-            </select>
-          </div>
         </div>
       </div>
 

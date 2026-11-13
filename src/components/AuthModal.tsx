@@ -66,7 +66,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </div>
           <h2 className="font-heading text-xl font-bold text-[#F8F5FC]">
-            Our Little Kitchen 💜
+            Mari amore 💜
           </h2>
           <p className="text-xs text-[#B8AFC4]">
             {isLoggedIn ? 'Sessão ativa no espaço compartilhado' : 'Entre com seu perfil'}

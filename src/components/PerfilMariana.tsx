@@ -71,10 +71,10 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
           </div>
 
           <h1 className="font-heading text-xl sm:text-2xl font-bold text-[#F8F5FC]">
-            Perfil de {userName || 'Mariana'} 🌸
+            Perfil da {userName || 'Mari'} 🌸
           </h1>
           <p className="text-xs text-[#B8AFC4] mt-1">
-            Configuração simplificada: edite seu nome e sua meta diária de calorias
+            Espaço pessoal da Mari amore: edite seu nome e sua meta diária de calorias
           </p>
         </div>
       </div>
@@ -103,7 +103,7 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
               required
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              placeholder="Digite seu nome (ex: Mariana ou Lívia)"
+              placeholder="Digite seu nome (ex: Mari ou Mariana)"
               className="w-full px-4 py-3 rounded-2xl bg-[#1A1224] border border-[#322046] focus:border-[#8B5CF6] text-sm font-bold text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none transition-colors"
             />
           </div>
