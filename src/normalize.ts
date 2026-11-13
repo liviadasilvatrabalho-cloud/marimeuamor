@@ -422,7 +422,9 @@ async function syncMeals(client: any, spaceId: string, profileId: string, meals:
       mealId = existing.rows[0].id;
       await client.query(
         `UPDATE meals SET
-           title = $2, photo_path = $3, confidence_notes = $4, updated_by = $5
+           title = $2, photo_path = $3, confidence_notes = $4, updated_by = $5,
+           is_planned = $6, consumed_at = $7, total_calories = $8, total_protein = $9,
+           total_carbs = $10, total_fat = $11, total_fiber = $12
          WHERE id = $1`,
         [
           mealId,
@@ -430,6 +432,13 @@ async function syncMeals(client: any, spaceId: string, profileId: string, meals:
           cleanText(meal.photoUrl),
           cleanText(meal.confidenceNotes),
           profileId,
+          Boolean(meal.isPlanned),
+          meal.consumedAt || null,
+          num(meal.totalCalories),
+          num(meal.totalProtein),
+          num(meal.totalCarbs),
+          num(meal.totalFat),
+          num(meal.totalFiber),
         ]
       );
       await client.query(`DELETE FROM meal_items WHERE meal_id = $1`, [mealId]);
@@ -437,8 +446,9 @@ async function syncMeals(client: any, spaceId: string, profileId: string, meals:
       const inserted = await client.query(
         `INSERT INTO meals (
            kitchen_space_id, user_id, meal_date, meal_type, title, photo_path,
-           identification_method, confidence_notes, external_id
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           identification_method, confidence_notes, external_id,
+           is_planned, consumed_at, total_calories, total_protein, total_carbs, total_fat, total_fiber
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT DO NOTHING
          RETURNING id`,
         [
@@ -451,6 +461,13 @@ async function syncMeals(client: any, spaceId: string, profileId: string, meals:
           meal.confidenceNotes ? 'foto' : 'manual',
           cleanText(meal.confidenceNotes),
           externalId,
+          Boolean(meal.isPlanned),
+          meal.consumedAt || null,
+          num(meal.totalCalories),
+          num(meal.totalProtein),
+          num(meal.totalCarbs),
+          num(meal.totalFat),
+          num(meal.totalFiber),
         ]
       );
       if (!inserted.rows[0]?.id) continue;

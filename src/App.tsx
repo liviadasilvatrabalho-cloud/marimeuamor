@@ -3,6 +3,7 @@ import { AppState, MealLog, FoodItem, WeeklyPlan, UserProfile, MealType } from '
 import { StorageService, INITIAL_USER_PROFILE } from './services/storage';
 import { Header, MobileTabBar, MobileMenuDrawer, TabId } from './components/Navigation';
 import { MeuDia } from './components/MeuDia';
+import { MeusAlimentos } from './components/MeusAlimentos';
 import { FoodScannerModal } from './components/FoodScannerModal';
 import { NutritionLabelModal } from './components/NutritionLabelModal';
 import { SemBalanca } from './components/SemBalanca';
@@ -105,32 +106,43 @@ export default function App() {
     }));
   };
 
-  // Add individual food item to a meal slot
-  const handleAddMealItem = (item: FoodItem, targetType: MealType) => {
+  // Add individual food item to a meal slot on ANY date (consumed or planned)
+  const handleAddMealItem = (
+    item: FoodItem,
+    targetType: MealType,
+    date?: string,
+    isPlanned: boolean = false
+  ) => {
     updateStateAndPersist((prev) => {
+      const targetDate = date || new Date().toISOString().split('T')[0];
       const today = new Date().toISOString().split('T')[0];
-      const existingMeal = prev.todayLogs.find((l) => l.mealType === targetType && l.date === today);
+      const allLogs = [...(prev.todayLogs || []), ...(prev.historyLogs || [])];
 
-      let newTodayLogs: MealLog[];
+      // Encontra refeição correspondente (mesma data, mesmo slot e mesmo status de planejado/consumido)
+      const existingMeal = allLogs.find(
+        (l) => l.mealType === targetType && l.date === targetDate && Boolean(l.isPlanned) === Boolean(isPlanned)
+      );
+
+      let updatedLogs: MealLog[];
       if (existingMeal) {
-        newTodayLogs = prev.todayLogs.map((l) => {
+        updatedLogs = allLogs.map((l) => {
           if (l.id !== existingMeal.id) return l;
           const updatedFoods = [...l.foods, item];
           return {
             ...l,
             title: updatedFoods.map((f) => f.name).join(', '),
             foods: updatedFoods,
-            totalCalories: updatedFoods.reduce((acc, f) => acc + f.calories, 0),
-            totalProtein: Number(updatedFoods.reduce((acc, f) => acc + f.protein, 0).toFixed(1)),
-            totalCarbs: Number(updatedFoods.reduce((acc, f) => acc + f.carbs, 0).toFixed(1)),
-            totalFat: Number(updatedFoods.reduce((acc, f) => acc + f.fat, 0).toFixed(1)),
-            totalFiber: Number(updatedFoods.reduce((acc, f) => acc + f.fiber, 0).toFixed(1)),
+            totalCalories: Number(updatedFoods.reduce((acc, f) => acc + (f.calories || 0), 0).toFixed(1)),
+            totalProtein: Number(updatedFoods.reduce((acc, f) => acc + (f.protein || 0), 0).toFixed(2)),
+            totalCarbs: Number(updatedFoods.reduce((acc, f) => acc + (f.carbs || 0), 0).toFixed(2)),
+            totalFat: Number(updatedFoods.reduce((acc, f) => acc + (f.fat || 0), 0).toFixed(2)),
+            totalFiber: Number(updatedFoods.reduce((acc, f) => acc + (f.fiber || 0), 0).toFixed(2)),
           };
         });
       } else {
         const newLog: MealLog = {
-          id: `meal-${Date.now()}`,
-          date: today,
+          id: `meal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          date: targetDate,
           mealType: targetType,
           title: item.name,
           foods: [item],
@@ -139,75 +151,111 @@ export default function App() {
           totalCarbs: item.carbs,
           totalFat: item.fat,
           totalFiber: item.fiber,
+          isPlanned,
           createdAt: new Date().toISOString(),
         };
-        newTodayLogs = [newLog, ...prev.todayLogs];
+        updatedLogs = [newLog, ...allLogs];
       }
 
       return {
         ...prev,
-        todayLogs: newTodayLogs,
+        todayLogs: updatedLogs.filter((l) => l.date === today),
+        historyLogs: updatedLogs.filter((l) => l.date !== today),
       };
     });
   };
 
-  // Delete a specific food item from a meal
+  // Marcar refeição planejada como consumida
+  const handleTogglePlannedMeal = (mealId: string, updatedFoods?: FoodItem[]) => {
+    updateStateAndPersist((prev) => {
+      const today = new Date().toISOString().split('T')[0];
+      const allLogs = [...(prev.todayLogs || []), ...(prev.historyLogs || [])];
+
+      const updatedLogs = allLogs.map((l) => {
+        if (l.id !== mealId) return l;
+        const foods = updatedFoods || l.foods;
+        return {
+          ...l,
+          isPlanned: false,
+          consumedAt: new Date().toISOString(),
+          foods,
+          totalCalories: Number(foods.reduce((acc, f) => acc + (f.calories || 0), 0).toFixed(1)),
+          totalProtein: Number(foods.reduce((acc, f) => acc + (f.protein || 0), 0).toFixed(2)),
+          totalCarbs: Number(foods.reduce((acc, f) => acc + (f.carbs || 0), 0).toFixed(2)),
+          totalFat: Number(foods.reduce((acc, f) => acc + (f.fat || 0), 0).toFixed(2)),
+          totalFiber: Number(foods.reduce((acc, f) => acc + (f.fiber || 0), 0).toFixed(2)),
+        };
+      });
+
+      return {
+        ...prev,
+        todayLogs: updatedLogs.filter((l) => l.date === today),
+        historyLogs: updatedLogs.filter((l) => l.date !== today),
+      };
+    });
+  };
+
+  // Delete a specific food item from a meal on any date
   const handleDeleteFoodItem = (mealId: string, foodId: string) => {
     updateStateAndPersist((prev) => {
-      const targetMeal = prev.todayLogs.find((l) => l.id === mealId);
+      const today = new Date().toISOString().split('T')[0];
+      const allLogs = [...(prev.todayLogs || []), ...(prev.historyLogs || [])];
+      const targetMeal = allLogs.find((l) => l.id === mealId);
       if (!targetMeal) return prev;
 
       const remainingFoods = targetMeal.foods.filter((f) => f.id !== foodId);
+      let updatedLogs: MealLog[];
       if (remainingFoods.length === 0) {
-        return {
-          ...prev,
-          todayLogs: prev.todayLogs.filter((l) => l.id !== mealId),
+        updatedLogs = allLogs.filter((l) => l.id !== mealId);
+      } else {
+        const updatedMeal: MealLog = {
+          ...targetMeal,
+          title: remainingFoods.map((f) => f.name).join(', '),
+          foods: remainingFoods,
+          totalCalories: Number(remainingFoods.reduce((acc, f) => acc + (f.calories || 0), 0).toFixed(1)),
+          totalProtein: Number(remainingFoods.reduce((acc, f) => acc + (f.protein || 0), 0).toFixed(2)),
+          totalCarbs: Number(remainingFoods.reduce((acc, f) => acc + (f.carbs || 0), 0).toFixed(2)),
+          totalFat: Number(remainingFoods.reduce((acc, f) => acc + (f.fat || 0), 0).toFixed(2)),
+          totalFiber: Number(remainingFoods.reduce((acc, f) => acc + (f.fiber || 0), 0).toFixed(2)),
         };
+        updatedLogs = allLogs.map((l) => (l.id === mealId ? updatedMeal : l));
       }
-
-      const updatedMeal: MealLog = {
-        ...targetMeal,
-        title: remainingFoods.map((f) => f.name).join(', '),
-        foods: remainingFoods,
-        totalCalories: remainingFoods.reduce((acc, f) => acc + f.calories, 0),
-        totalProtein: Number(remainingFoods.reduce((acc, f) => acc + f.protein, 0).toFixed(1)),
-        totalCarbs: Number(remainingFoods.reduce((acc, f) => acc + f.carbs, 0).toFixed(1)),
-        totalFat: Number(remainingFoods.reduce((acc, f) => acc + f.fat, 0).toFixed(1)),
-        totalFiber: Number(remainingFoods.reduce((acc, f) => acc + f.fiber, 0).toFixed(1)),
-      };
 
       return {
         ...prev,
-        todayLogs: prev.todayLogs.map((l) => (l.id === mealId ? updatedMeal : l)),
+        todayLogs: updatedLogs.filter((l) => l.date === today),
+        historyLogs: updatedLogs.filter((l) => l.date !== today),
       };
     });
   };
 
-  // Update grams and dynamically recalculate calories and macros for a food item in a meal
+  // Update grams and dynamically recalculate calories and macros on any date
   const handleUpdateFoodItemGrams = (mealId: string, foodId: string, newGrams: number) => {
     updateStateAndPersist((prev) => {
-      const targetMeal = prev.todayLogs.find((l) => l.id === mealId);
+      const today = new Date().toISOString().split('T')[0];
+      const allLogs = [...(prev.todayLogs || []), ...(prev.historyLogs || [])];
+      const targetMeal = allLogs.find((l) => l.id === mealId);
       if (!targetMeal) return prev;
 
       const updatedFoods = targetMeal.foods.map((f) => {
         if (f.id !== foodId) return f;
         const g = Math.max(1, newGrams);
         const p100 = f.per100g || {
-          calories: Math.round(((f.calories || 0) / (f.portionGrams || 100)) * 100),
-          protein: Number((((f.protein || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
-          carbs: Number((((f.carbs || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
-          fat: Number((((f.fat || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
-          fiber: Number((((f.fiber || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
+          calories: ((f.calories || 0) / (f.portionGrams || 100)) * 100,
+          protein: ((f.protein || 0) / (f.portionGrams || 100)) * 100,
+          carbs: ((f.carbs || 0) / (f.portionGrams || 100)) * 100,
+          fat: ((f.fat || 0) / (f.portionGrams || 100)) * 100,
+          fiber: ((f.fiber || 0) / (f.portionGrams || 100)) * 100,
         };
         const ratio = g / 100;
         return {
           ...f,
           portionGrams: g,
-          calories: Math.round((p100.calories || 0) * ratio),
-          protein: Number(((p100.protein || 0) * ratio).toFixed(1)),
-          carbs: Number(((p100.carbs || 0) * ratio).toFixed(1)),
-          fat: Number(((p100.fat || 0) * ratio).toFixed(1)),
-          fiber: Number(((p100.fiber || 0) * ratio).toFixed(1)),
+          calories: Number(((p100.calories || 0) * ratio).toFixed(1)),
+          protein: Number(((p100.protein || 0) * ratio).toFixed(2)),
+          carbs: Number(((p100.carbs || 0) * ratio).toFixed(2)),
+          fat: Number(((p100.fat || 0) * ratio).toFixed(2)),
+          fiber: Number(((p100.fiber || 0) * ratio).toFixed(2)),
           per100g: p100,
         };
       });
@@ -215,16 +263,18 @@ export default function App() {
       const updatedMeal: MealLog = {
         ...targetMeal,
         foods: updatedFoods,
-        totalCalories: updatedFoods.reduce((acc, f) => acc + f.calories, 0),
-        totalProtein: Number(updatedFoods.reduce((acc, f) => acc + f.protein, 0).toFixed(1)),
-        totalCarbs: Number(updatedFoods.reduce((acc, f) => acc + f.carbs, 0).toFixed(1)),
-        totalFat: Number(updatedFoods.reduce((acc, f) => acc + f.fat, 0).toFixed(1)),
-        totalFiber: Number(updatedFoods.reduce((acc, f) => acc + f.fiber, 0).toFixed(1)),
+        totalCalories: Number(updatedFoods.reduce((acc, f) => acc + (f.calories || 0), 0).toFixed(1)),
+        totalProtein: Number(updatedFoods.reduce((acc, f) => acc + (f.protein || 0), 0).toFixed(2)),
+        totalCarbs: Number(updatedFoods.reduce((acc, f) => acc + (f.carbs || 0), 0).toFixed(2)),
+        totalFat: Number(updatedFoods.reduce((acc, f) => acc + (f.fat || 0), 0).toFixed(2)),
+        totalFiber: Number(updatedFoods.reduce((acc, f) => acc + (f.fiber || 0), 0).toFixed(2)),
       };
 
+      const updatedLogs = allLogs.map((l) => (l.id === mealId ? updatedMeal : l));
       return {
         ...prev,
-        todayLogs: prev.todayLogs.map((l) => (l.id === mealId ? updatedMeal : l)),
+        todayLogs: updatedLogs.filter((l) => l.date === today),
+        historyLogs: updatedLogs.filter((l) => l.date !== today),
       };
     });
   };
@@ -248,12 +298,25 @@ export default function App() {
     });
   };
 
-  // Delete an entire meal
-  const handleDeleteMeal = (mealId: string) => {
+  // Delete food from Meus Alimentos (WITHOUT modifying past meals)
+  const handleDeleteCustomFood = (foodId: string) => {
     updateStateAndPersist((prev) => ({
       ...prev,
-      todayLogs: prev.todayLogs.filter((l) => l.id !== mealId),
+      customFoods: (prev.customFoods || []).filter((f) => f.id !== foodId),
     }));
+  };
+
+  // Delete an entire meal on any date
+  const handleDeleteMeal = (mealId: string) => {
+    updateStateAndPersist((prev) => {
+      const today = new Date().toISOString().split('T')[0];
+      const allLogs = [...(prev.todayLogs || []), ...(prev.historyLogs || [])].filter((l) => l.id !== mealId);
+      return {
+        ...prev,
+        todayLogs: allLogs.filter((l) => l.date === today),
+        historyLogs: allLogs.filter((l) => l.date !== today),
+      };
+    });
   };
 
   // Delete history item
@@ -349,8 +412,24 @@ export default function App() {
             onDeleteMeal={handleDeleteMeal}
             onDeleteFoodItem={handleDeleteFoodItem}
             onUpdateFoodItemGrams={handleUpdateFoodItemGrams}
+            onAddMealItem={handleAddMealItem}
+            onTogglePlannedMeal={handleTogglePlannedMeal}
+            onNavigateToMeusAlimentos={() => setActiveTab('meus-alimentos')}
             onUpdateMealSlots={(slots) => {
               updateStateAndPersist((prev) => ({ ...prev, mealSlots: slots }));
+            }}
+          />
+        )}
+
+        {activeTab === 'meus-alimentos' && (
+          <MeusAlimentos
+            appState={appState}
+            onSaveCustomFood={handleSaveCustomFood}
+            onDeleteCustomFood={handleDeleteCustomFood}
+            onAddMealItem={handleAddMealItem}
+            onOpenPhotoScannerModal={() => {
+              setSelectedMealTypeForAction('almoco');
+              setIsBarcodeScannerOpen(true);
             }}
           />
         )}

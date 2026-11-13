@@ -33,6 +33,7 @@ export interface FoodItem {
   name: string;
   brand?: string;
   barcode?: string;
+  createdAt?: string;
   per100g?: {
     calories?: number;
     protein?: number;
@@ -86,6 +87,8 @@ export interface MealLog {
   photoUrl?: string;
   confidenceNotes?: string;
   createdAt: string;
+  isPlanned?: boolean;
+  consumedAt?: string;
 }
 
 export interface MarmitaItem {

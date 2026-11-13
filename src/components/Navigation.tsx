@@ -13,11 +13,13 @@ import {
   X,
   Plus,
   LayoutGrid,
+  Apple,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
 export type TabId =
   | 'meu-dia'
+  | 'meus-alimentos'
   | 'scanner'
   | 'barcode'
   | 'sem-balanca'
@@ -73,13 +75,25 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
         <nav className="hidden lg:flex w-full order-3 items-center justify-center gap-1 xl:gap-1.5 mt-2.5 pt-2.5 border-t border-[#33263F]/60 overflow-x-auto no-scrollbar">
           <button
             onClick={() => onSelectTab('meu-dia')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === 'meu-dia'
                 ? 'bg-[#18121F] text-[#A78BFA] border border-[#8B5CF6]/50'
                 : 'text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#18121F]/60'
             }`}
           >
-            Meu Dia
+            <Calendar className="w-3.5 h-3.5 text-[#A78BFA]" />
+            <span>Diário</span>
+          </button>
+          <button
+            onClick={() => onSelectTab('meus-alimentos')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'meus-alimentos'
+                ? 'bg-[#18121F] text-[#A78BFA] border border-[#8B5CF6]/50'
+                : 'text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#18121F]/60'
+            }`}
+          >
+            <Apple className="w-3.5 h-3.5 text-[#EC4899]" />
+            <span>Meus Alimentos</span>
           </button>
           <button
             onClick={() => onSelectTab('scanner')}
@@ -90,7 +104,7 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
             }`}
           >
             <Camera className="w-3.5 h-3.5 text-[#EC4899]" />
-            Scanner IA
+            <span>Scanner IA</span>
           </button>
           <button
             onClick={() => onSelectTab('barcode')}
@@ -101,7 +115,7 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
             }`}
           >
             <FileText className="w-3.5 h-3.5 text-[#A78BFA]" />
-            Foto da Tabela
+            <span>Foto da Tabela</span>
           </button>
           <button
             onClick={() => onSelectTab('sem-balanca')}
@@ -213,8 +227,8 @@ export const MobileTabBar: React.FC<
 }) => {
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#100C16]/95 backdrop-blur-lg border-t border-[#33263F] px-1 py-1 pb-safe shadow-2xl">
-      <div className="grid grid-cols-2 items-center justify-around max-w-md mx-auto">
-        {/* Tab 1: Meu Dia */}
+      <div className="grid grid-cols-5 items-center justify-around max-w-md mx-auto">
+        {/* Tab 1: Diário */}
         <button
           onClick={() => onSelectTab('meu-dia')}
           className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
@@ -222,7 +236,18 @@ export const MobileTabBar: React.FC<
           }`}
         >
           <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-0.5">Meu Dia</span>
+          <span className="text-[10px] font-medium tracking-tight mt-0.5">Diário</span>
+        </button>
+
+        {/* Tab 2: Meus Alimentos */}
+        <button
+          onClick={() => onSelectTab('meus-alimentos')}
+          className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
+            activeTab === 'meus-alimentos' ? 'text-[#EC4899]' : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
+          }`}
+        >
+          <Apple className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[10px] font-medium tracking-tight mt-0.5">Alimentos</span>
         </button>
 
         {/* Center Floating Action: Fotografar com IA */}
@@ -235,6 +260,26 @@ export const MobileTabBar: React.FC<
             <Camera className="w-5 h-5 text-white" />
           </button>
         </div>
+
+        {/* Tab 4: Perfil */}
+        <button
+          onClick={() => onSelectTab('perfil')}
+          className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
+            activeTab === 'perfil' ? 'text-[#EC4899]' : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
+          }`}
+        >
+          <User className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[10px] font-medium tracking-tight mt-0.5">Perfil</span>
+        </button>
+
+        {/* Tab 5: Menu com Mais Ferramentas */}
+        <button
+          onClick={onOpenMenu}
+          className="flex flex-col items-center justify-center py-1 text-[#B8AFC4] hover:text-[#F8F5FC] transition-colors min-h-[46px] cursor-pointer"
+        >
+          <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[10px] font-medium tracking-tight mt-0.5">Mais</span>
+        </button>
       </div>
     </div>
   );
@@ -268,10 +313,17 @@ export const MobileMenuDrawer: React.FC<{
   }[] = [
     {
       id: 'meu-dia',
-      label: 'Meu Dia',
-      description: 'Metas diárias, calorias e refeições de hoje',
+      label: 'Diário Nutricional',
+      description: 'Navegação por dias, metas e refeições consumidas/planejadas',
       icon: <Calendar className="w-4 h-4 text-[#A78BFA]" />,
       color: 'border-[#8B5CF6]/40',
+    },
+    {
+      id: 'meus-alimentos',
+      label: 'Meus Alimentos',
+      description: 'Biblioteca de alimentos cadastrados permanentemente',
+      icon: <Apple className="w-4 h-4 text-[#EC4899]" />,
+      color: 'border-[#EC4899]/40',
     },
     {
       id: 'sem-balanca',

@@ -37,6 +37,7 @@ export const INITIAL_RECIPES: Recipe[] = [];
 
 export const INITIAL_MEAL_SLOTS: MealSlot[] = [
   { id: 'cafe', label: 'Café da Manhã', timeHint: '07:00 - 09:30', icon: '☕' },
+  { id: 'lanche_manha', label: 'Lanche da Manhã', timeHint: '10:00 - 11:30', icon: '🍌' },
   { id: 'almoco', label: 'Almoço', timeHint: '12:00 - 14:00', icon: '🥗' },
   { id: 'lanche', label: 'Lanche da Tarde', timeHint: '16:00 - 17:30', icon: '🍎' },
   { id: 'jantar', label: 'Jantar', timeHint: '19:30 - 21:00', icon: '🍲' },
@@ -67,10 +68,8 @@ export const StorageService = {
       if (res.ok) {
         const serverData = await res.json();
         if (serverData && serverData.user) {
-          // Modo usuário único (só a Mari): força a identidade da Mari,
-          // ignorando qualquer nome salvo anteriormente (ex.: Lívia).
-          serverData.user.name = 'Mariana';
-          serverData.user.email = 'mariana@ourlittlekitchen.app';
+          serverData.user.name = serverData.user.name || 'Mariana';
+          serverData.user.email = serverData.user.email || 'mariana@ourlittlekitchen.app';
           if (!serverData.todayLogs) {
             serverData.todayLogs = [];
           }
@@ -103,8 +102,8 @@ export const StorageService = {
       if (local) {
         const parsed = JSON.parse(local);
         if (parsed && parsed.user) {
-          parsed.user.name = 'Mariana';
-          parsed.user.email = 'mariana@ourlittlekitchen.app';
+          parsed.user.name = parsed.user.name || 'Mariana';
+          parsed.user.email = parsed.user.email || 'mariana@ourlittlekitchen.app';
           return parsed;
         }
       }
@@ -137,8 +136,8 @@ export const StorageService = {
       if (!res.ok) return null;
       const data = await res.json();
       if (data?.user) {
-        data.user.name = 'Mariana';
-        data.user.email = 'mariana@ourlittlekitchen.app';
+        data.user.name = data.user.name || 'Mariana';
+        data.user.email = data.user.email || 'mariana@ourlittlekitchen.app';
       }
       return data?.user ? (data as AppState) : null;
     } catch {
