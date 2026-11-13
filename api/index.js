@@ -3610,6 +3610,36 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
     });
   }
 });
+function parsePtBrNumber(val) {
+  if (val === null || val === void 0) return null;
+  if (typeof val === "number") {
+    return isNaN(val) ? null : val;
+  }
+  const str = String(val).trim();
+  if (!str || str === "-" || str.toLowerCase() === "n/a" || str.toLowerCase() === "tr" || str.toLowerCase() === "tra\xE7os") {
+    return null;
+  }
+  const cleaned = str.replace(/[^\d.,-]/g, "").trim();
+  if (!cleaned) return null;
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
+      const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+      const num3 = parseFloat(normalized);
+      return isNaN(num3) ? null : num3;
+    } else {
+      const normalized = cleaned.replace(/,/g, "");
+      const num3 = parseFloat(normalized);
+      return isNaN(num3) ? null : num3;
+    }
+  }
+  if (cleaned.includes(",")) {
+    const normalized = cleaned.replace(",", ".");
+    const num3 = parseFloat(normalized);
+    return isNaN(num3) ? null : num3;
+  }
+  const num2 = parseFloat(cleaned);
+  return isNaN(num2) ? null : num2;
+}
 app.post("/api/gemini/ocr-label", async (req, res) => {
   try {
     const { imageBase64, mimeType = "image/jpeg", barcode, productNameHint, brandHint } = req.body;
@@ -3630,20 +3660,28 @@ DIRETRIZES FUNDAMENTAIS DE CONFIABILIDADE E FIDELIDADE:
 1. TESTE DE LEGIBILIDADE:
    - Se a imagem estiver cortada, muito emba\xE7ada, ileg\xEDvel, sem ilumina\xE7\xE3o adequada ou N\xC3O contiver uma tabela nutricional de alimentos, defina "isLegible": false.
    - Em "illegibleReason", forne\xE7a uma explica\xE7\xE3o gentil e clara em portugu\xEAs instruindo Mariana a tirar uma nova foto mais n\xEDtida, aproximada e com boa ilumina\xE7\xE3o.
-2. NUNCA INVENTE DADOS:
+2. FIDELIDADE NUM\xC9RICA ABSOLUTA E CASAS DECIMAIS BRASILEIRAS:
+   - No Brasil, r\xF3tulos e embalagens usam v\xEDrgula como separador decimal (ex: 12,5 g; 0,8 g; 3,25 g; 125,6 kcal; 0,04 g; 1,5 mg).
+   - Extraia e retorne os n\xFAmeros com ponto decimal mantendo as casas decimais exatas da embalagem (ex: 12.5, 0.8, 3.25, 125.6, 0.04).
+   - NUNCA remova casas decimais! NUNCA transforme n\xFAmeros decimais em inteiros (NUNCA transforme 12,5 em 125 ou 0,8 em 8)!
+   - NUNCA arredonde automaticamente n\xFAmeros que possuem decimais no r\xF3tulo.
+3. CALORIAS DECLARADAS (SEM RECALCULAR):
+   - Extraia exatamente o 'Valor Energ\xE9tico' (kcal) impresso na embalagem (ex: se diz 125.6 kcal, informe 125.6; se diz 134 kcal, informe 134).
+   - NUNCA recalcule ou altere o valor energ\xE9tico por conta pr\xF3pria a partir de 4*C + 4*P + 9*G! Os r\xF3tulos industriais possuem arredondamentos pr\xF3prios permitidos pela legisla\xE7\xE3o.
+4. NUNCA INVENTE DADOS:
    - Extraia estritamente o que est\xE1 impresso na embalagem.
    - NUNCA transforme campos ausentes em zero! Se um nutriente (ex: a\xE7\xFAcares adicionados, gorduras trans, s\xF3dio) N\xC3O constar na tabela ou r\xF3tulo, retorne null para esse campo.
-3. VALORES POR 100g / 100ml vs. VALORES POR POR\xC7\xC3O:
+5. VALORES POR 100g / 100ml vs. VALORES POR POR\xC7\xC3O:
    - No padr\xE3o brasileiro ANVISA, a tabela geralmente tem duas colunas: "100 g" (ou 100 ml) e "Por\xE7\xE3o (ex: 30g)".
-   - Extraia ambos os blocos ("per100" e "perPortion") com precis\xE3o.
-   - Se a embalagem contiver apenas a por\xE7\xE3o, informe os valores da por\xE7\xE3o e calcule matematicamente os valores por 100g/ml proporcionais.
-4. UNIDADE DA POR\xC7\xC3O:
+   - Extraia ambos os blocos ("per100" e "perPortion") com precis\xE3o decimal.
+   - Se a embalagem contiver apenas a por\xE7\xE3o, informe os valores da por\xE7\xE3o e calcule os valores por 100g/ml proporcionais.
+6. UNIDADE DA POR\xC7\xC3O:
    - Identifique com exatid\xE3o se o alimento \xE9 s\xF3lido (unidade "g") ou l\xEDquido (unidade "ml").
    - Identifique a medida caseira se informada (ex: "2 fatias", "1 x\xEDcara", "3 biscoitos").
-5. N\xCDVEL DE CONFIAN\xC7A POR CAMPO:
+7. N\xCDVEL DE CONFIAN\xC7A POR CAMPO:
    - Atribua o n\xEDvel de confian\xE7a ("alta", "media" ou "baixa") para cada nutriente identificado, baseado na clareza visual dos n\xFAmeros na foto.
    - D\xEA uma nota geral de confian\xE7a de 0 a 100 em "overallConfidence".
-6. C\xD3DIGO DE BARRAS E NOME:
+8. C\xD3DIGO DE BARRAS E NOME:
    - Se houver nome comercial ou marca vis\xEDvel no r\xF3tulo, extraia. Se fornecido pelo usu\xE1rio (${productNameHint ? `Nome sugerido: "${productNameHint}"` : "n\xE3o fornecido"}), preserve-o como prefer\xEAncia.
 
 Responda ESTRITAMENTE em formato JSON com este schema:
@@ -3659,27 +3697,27 @@ Responda ESTRITAMENTE em formato JSON com este schema:
     "servingsPerPackage": 5
   },
   "perPortion": {
-    "calories": 140,
+    "calories": 140.5,
     "carbs": 21.0,
-    "sugars": 5.0,
+    "sugars": 5.2,
     "addedSugars": 3.0,
     "protein": 2.5,
-    "totalFat": 5.2,
+    "totalFat": 5.25,
     "saturatedFat": 2.1,
-    "transFat": 0.0,
+    "transFat": 0.04,
     "fiber": 1.4,
     "sodium": 85
   },
   "per100": {
     "unit": "100g",
-    "calories": 466,
+    "calories": 468.3,
     "carbs": 70.0,
-    "sugars": 16.7,
+    "sugars": 17.3,
     "addedSugars": 10.0,
     "protein": 8.3,
-    "totalFat": 17.3,
+    "totalFat": 17.5,
     "saturatedFat": 7.0,
-    "transFat": 0.0,
+    "transFat": 0.13,
     "fiber": 4.7,
     "sodium": 283
   },
@@ -3724,25 +3762,24 @@ Responda ESTRITAMENTE em formato JSON com este schema:
         confidence: { overall: 10 }
       });
     }
-    const servingQty = Number(parsed.portion?.servingQuantity) || 100;
+    const servingQty = parsePtBrNumber(parsed.portion?.servingQuantity) || 100;
     const servingUnit = parsed.portion?.servingUnit === "ml" ? "ml" : "g";
     const servingRatio = servingQty > 0 ? 100 / servingQty : 1;
     let per1002 = parsed.per100 || {};
     let perPortion = parsed.perPortion || {};
     const resolveNutrient = (pVal, hVal) => {
-      const pNum = pVal != null && !isNaN(Number(pVal)) ? Number(pVal) : null;
-      const hNum = hVal != null && !isNaN(Number(hVal)) ? Number(hVal) : null;
+      const pNum = parsePtBrNumber(pVal);
+      const hNum = parsePtBrNumber(hVal);
+      if (hNum != null && pNum != null) {
+        return { per100: hNum, perPortion: pNum };
+      }
       if (hNum != null) {
-        return {
-          per100: Number(hNum.toFixed(1)),
-          perPortion: pNum != null ? Number(pNum.toFixed(1)) : Number((hNum * servingQty / 100).toFixed(1))
-        };
+        const calculatedPortion = servingQty > 0 ? Number((hNum * servingQty / 100).toFixed(2)) : hNum;
+        return { per100: hNum, perPortion: calculatedPortion };
       }
       if (pNum != null) {
-        return {
-          per100: Number((pNum * servingRatio).toFixed(1)),
-          perPortion: Number(pNum.toFixed(1))
-        };
+        const calculated100 = servingRatio > 0 ? Number((pNum * servingRatio).toFixed(2)) : pNum;
+        return { per100: calculated100, perPortion: pNum };
       }
       return { per100: null, perPortion: null };
     };
@@ -3768,7 +3805,7 @@ Responda ESTRITAMENTE em formato JSON com este schema:
         servingsPerPackage: parsed.portion?.servingsPerPackage || null
       },
       per100g: {
-        calories: cCalories.per100 != null ? Math.round(cCalories.per100) : 0,
+        calories: cCalories.per100 != null ? cCalories.per100 : 0,
         carbs: cCarbs.per100,
         sugars: cSugars.per100,
         addedSugars: cAddedSugars.per100,
@@ -3780,7 +3817,7 @@ Responda ESTRITAMENTE em formato JSON com este schema:
         sodium: cSodium.per100
       },
       perPortion: {
-        calories: cCalories.perPortion != null ? Math.round(cCalories.perPortion) : 0,
+        calories: cCalories.perPortion != null ? cCalories.perPortion : 0,
         carbs: cCarbs.perPortion,
         sugars: cSugars.perPortion,
         addedSugars: cAddedSugars.perPortion,
@@ -4319,22 +4356,22 @@ var handleSaveProductOrFood = async (req, res) => {
     }
     const barcode = b.barcode && String(b.barcode).trim() !== "" ? String(b.barcode).trim() : `FOTO-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const brand = b.brand ? String(b.brand).trim() : null;
-    const servingQuantity = Number(b.servingGrams || b.serving_quantity) || 100;
+    const servingQuantity = parsePtBrNumber(b.servingGrams || b.serving_quantity) || 100;
     const servingUnit = String(b.servingSize || b.serving_unit || `${servingQuantity}g`);
     const p100 = b.per100g || {};
-    const caloriesPer100 = Number(p100.calories) || 0;
-    const proteinPer100 = Number(p100.protein) || 0;
-    const carbsPer100 = Number(p100.carbs) || 0;
-    const fatPer100 = Number(p100.fat) || 0;
-    const saturatedFatPer100 = p100.saturatedFat != null ? Number(p100.saturatedFat) : null;
-    const transFatPer100 = p100.transFat != null ? Number(p100.transFat) : null;
-    const fiberPer100 = Number(p100.fiber) || 0;
-    const sugarsPer100 = p100.sugars != null ? Number(p100.sugars) : null;
-    const addedSugarsPer100 = p100.addedSugars != null ? Number(p100.addedSugars) : null;
-    const sodiumPer100 = p100.sodium != null ? Number(p100.sodium) : null;
+    const caloriesPer100 = parsePtBrNumber(p100.calories) ?? 0;
+    const proteinPer100 = parsePtBrNumber(p100.protein) ?? 0;
+    const carbsPer100 = parsePtBrNumber(p100.carbs) ?? 0;
+    const fatPer100 = parsePtBrNumber(p100.fat) ?? 0;
+    const saturatedFatPer100 = parsePtBrNumber(p100.saturatedFat);
+    const transFatPer100 = parsePtBrNumber(p100.transFat);
+    const fiberPer100 = parsePtBrNumber(p100.fiber) ?? 0;
+    const sugarsPer100 = parsePtBrNumber(p100.sugars);
+    const addedSugarsPer100 = parsePtBrNumber(p100.addedSugars);
+    const sodiumPer100 = parsePtBrNumber(p100.sodium);
     const householdMeasure = b.householdMeasure || b.household_measure || null;
     const perPortion = b.perPortion || b.per_portion || null;
-    const caloriesPerServing = Math.round(caloriesPer100 * servingQuantity / 100);
+    const caloriesPerServing = perPortion?.calories != null ? parsePtBrNumber(perPortion.calories) ?? 0 : caloriesPer100 > 0 ? Number((caloriesPer100 * servingQuantity / 100).toFixed(2)) : 0;
     const dataSource = b.source || "Banco Local";
     const verificationStatus = b.verificationStatus || "user_confirmed";
     const confidenceScore = Number(b.confidenceScore) || 95;
@@ -4447,15 +4484,26 @@ var handleSaveProductOrFood = async (req, res) => {
             barcode: barcode || void 0,
             portionGrams: servingQuantity,
             calories: caloriesPerServing,
-            protein: Number((proteinPer100 * servingQuantity / 100).toFixed(1)),
-            carbs: Number((carbsPer100 * servingQuantity / 100).toFixed(1)),
-            fat: Number((fatPer100 * servingQuantity / 100).toFixed(1)),
-            fiber: Number((fiberPer100 * servingQuantity / 100).toFixed(1)),
-            sodium: sodiumPer100 != null ? Math.round(sodiumPer100 * servingQuantity / 100) : void 0,
-            sugars: sugarsPer100 != null ? Number((sugarsPer100 * servingQuantity / 100).toFixed(1)) : void 0,
-            saturatedFat: saturatedFatPer100 != null ? Number((saturatedFatPer100 * servingQuantity / 100).toFixed(1)) : void 0,
-            transFat: transFatPer100 != null ? Number((transFatPer100 * servingQuantity / 100).toFixed(1)) : void 0,
-            per100g: p100,
+            protein: perPortion?.protein != null ? parsePtBrNumber(perPortion.protein) ?? 0 : Number((proteinPer100 * servingQuantity / 100).toFixed(2)),
+            carbs: perPortion?.carbs != null ? parsePtBrNumber(perPortion.carbs) ?? 0 : Number((carbsPer100 * servingQuantity / 100).toFixed(2)),
+            fat: perPortion?.fat != null ? parsePtBrNumber(perPortion.fat) ?? 0 : Number((fatPer100 * servingQuantity / 100).toFixed(2)),
+            fiber: perPortion?.fiber != null ? parsePtBrNumber(perPortion.fiber) ?? 0 : Number((fiberPer100 * servingQuantity / 100).toFixed(2)),
+            sodium: perPortion?.sodium != null ? parsePtBrNumber(perPortion.sodium) : sodiumPer100 != null ? Number((sodiumPer100 * servingQuantity / 100).toFixed(1)) : void 0,
+            sugars: perPortion?.sugars != null ? parsePtBrNumber(perPortion.sugars) : sugarsPer100 != null ? Number((sugarsPer100 * servingQuantity / 100).toFixed(2)) : void 0,
+            saturatedFat: perPortion?.saturatedFat != null ? parsePtBrNumber(perPortion.saturatedFat) : saturatedFatPer100 != null ? Number((saturatedFatPer100 * servingQuantity / 100).toFixed(2)) : void 0,
+            transFat: perPortion?.transFat != null ? parsePtBrNumber(perPortion.transFat) : transFatPer100 != null ? Number((transFatPer100 * servingQuantity / 100).toFixed(2)) : void 0,
+            per100g: {
+              calories: caloriesPer100,
+              protein: proteinPer100,
+              carbs: carbsPer100,
+              fat: fatPer100,
+              fiber: fiberPer100,
+              sodium: sodiumPer100,
+              sugars: sugarsPer100,
+              addedSugars: addedSugarsPer100,
+              saturatedFat: saturatedFatPer100,
+              transFat: transFatPer100
+            },
             householdMeasure: householdMeasure || void 0,
             source: dataSource,
             verified: true,
