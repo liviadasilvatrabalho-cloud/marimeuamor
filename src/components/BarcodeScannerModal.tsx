@@ -22,6 +22,66 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { FoodItem, MealType, MealSlot } from '../types';
 import { INITIAL_MEAL_SLOTS } from '../services/storage';
 
+// Comprime fotos antes do envio evitando erro 413 da Vercel (limite 4.5MB)
+async function compressImageClient(
+  fileOrDataUrl: File | string,
+  maxDimension = 1400,
+  quality = 0.85
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = (err) => reject(err);
+
+    if (typeof fileOrDataUrl === 'string') {
+      img.src = fileOrDataUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(fileOrDataUrl);
+    }
+  });
+}
+
+async function parseResponseSafely(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.status === 413 || text.toLowerCase().includes('entity too large')) {
+      throw new Error('A foto enviada é muito grande. A imagem foi reduzida automaticamente, tente novamente.');
+    }
+    if (res.status === 504 || text.toLowerCase().includes('timeout')) {
+      throw new Error('Tempo limite no servidor. Tente novamente com uma foto mais aproximada.');
+    }
+    throw new Error(text || `Erro no servidor (código ${res.status})`);
+  }
+}
+
 interface BarcodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -351,11 +411,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setErrorMsg(null);
     setStatusInfo('Identificando código de barras na fotografia...');
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = e.target?.result as string;
-
-      // 1. Tentar decodificação local
+    try {
+      // 1. Tentar decodificação local primeiro
       try {
         const formatsToSupport = [
           Html5QrcodeSupportedFormats.EAN_13,
@@ -384,43 +441,41 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         // Fallback Gemini
       }
 
-      // 2. Multimodal Gemini Vision Reader
-      try {
-        setStatusInfo('Decodificando números do código de barras com IA...');
-        const res = await fetch('/api/gemini/read-barcode', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64,
-            mimeType: file.type || 'image/jpeg',
-          }),
-        });
+      // 2. Multimodal Gemini Vision Reader com compressão client-side
+      setStatusInfo('Decodificando números do código de barras com IA...');
+      const compressedBase64 = await compressImageClient(file, 1400, 0.85);
 
-        const aiData = await res.json();
-        if (!res.ok) {
-          setErrorMsg(aiData.error || 'Serviço de leitura por foto indisponível no momento.');
-          return;
-        }
-        if (aiData && aiData.found && aiData.barcode) {
-          const clean = aiData.barcode.trim();
-          setScannedCode(clean);
-          setManualCode(clean);
-          setStatusInfo(`Código identificado pela IA: ${clean}`);
-          await fetchBarcodeData(clean);
-        } else {
-          setErrorMsg(
-            aiData.reason ||
-              'Não foi possível identificar as barras na foto. Tente tirar uma foto mais nítida ou digite os números abaixo.'
-          );
-        }
-      } catch (err: any) {
-        setErrorMsg('Erro ao analisar foto do código de barras: ' + err.message);
-      } finally {
-        setIsLoading(false);
+      const res = await fetch('/api/gemini/read-barcode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: compressedBase64,
+          mimeType: 'image/jpeg',
+        }),
+      });
+
+      const aiData = await parseResponseSafely(res);
+      if (!res.ok) {
+        setErrorMsg(aiData.error || 'Serviço de leitura por foto indisponível no momento.');
+        return;
       }
-    };
-
-    reader.readAsDataURL(file);
+      if (aiData && aiData.found && aiData.barcode) {
+        const clean = String(aiData.barcode).trim();
+        setScannedCode(clean);
+        setManualCode(clean);
+        setStatusInfo(`Código identificado pela IA: ${clean}`);
+        await fetchBarcodeData(clean);
+      } else {
+        setErrorMsg(
+          aiData.reason ||
+            'Não foi possível identificar as barras na foto. Tente tirar uma foto mais nítida ou digite os números abaixo.'
+        );
+      }
+    } catch (err: any) {
+      setErrorMsg('Erro ao analisar foto do código de barras: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleManualSearch = (e: React.FormEvent) => {
@@ -439,61 +494,56 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setErrorMsg(null);
     setStatusInfo('Lendo tabela nutricional do rótulo com IA...');
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const base64 = event.target?.result as string;
-        const res = await fetch('/api/gemini/ocr-label', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64,
-            mimeType: file.type || 'image/jpeg',
-          }),
-        });
+    try {
+      const compressedBase64 = await compressImageClient(file, 1400, 0.85);
+      const res = await fetch('/api/gemini/ocr-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: compressedBase64,
+          mimeType: 'image/jpeg',
+        }),
+      });
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || 'Erro ao ler rótulo');
-        }
+      const ocrData = await parseResponseSafely(res);
 
-        const ocrData = await res.json();
-        const servingGrams = Number(ocrData.servingGrams) || 100;
-        const ratio = 100 / servingGrams;
-
-        const effectiveBarcode = scannedCode || manualCode || `AUTO-${Date.now()}`;
-
-        const converted: OpenFoodFactsResult = {
-          found: true,
-          barcode: effectiveBarcode,
-          productName: ocrData.productName || 'Produto Escaneado',
-          brand: ocrData.brand || '',
-          servingSize: ocrData.servingSize || `${servingGrams}g`,
-          servingGrams: servingGrams,
-          per100g: {
-            calories: Math.round((Number(ocrData.calories) || 0) * ratio),
-            protein: Number(((Number(ocrData.protein) || 0) * ratio).toFixed(1)),
-            carbs: Number(((Number(ocrData.carbs) || 0) * ratio).toFixed(1)),
-            fat: Number(((Number(ocrData.fat) || 0) * ratio).toFixed(1)),
-            fiber: Number(((Number(ocrData.fiber) || 0) * ratio).toFixed(1)),
-            sodium: Number(((Number(ocrData.sodium) || 0) * ratio).toFixed(1)),
-          },
-          source: 'Rótulo OCR (Salvo no Banco)',
-        };
-
-        setProduct(converted);
-        setConsumedGrams(servingGrams);
-        setStatusInfo(null);
-        setErrorMsg(null);
-      } catch (err: any) {
-        console.error('Erro no OCR:', err);
-        setErrorMsg('Não foi possível extrair a tabela nutricional do rótulo: ' + err.message);
-      } finally {
-        setIsOcrLoading(false);
+      if (!res.ok) {
+        throw new Error(ocrData.error || 'Erro ao ler rótulo');
       }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+
+      const servingGrams = Number(ocrData.servingGrams) || 100;
+      const ratio = 100 / servingGrams;
+
+      const effectiveBarcode = scannedCode || manualCode || `AUTO-${Date.now()}`;
+
+      const converted: OpenFoodFactsResult = {
+        found: true,
+        barcode: effectiveBarcode,
+        productName: ocrData.productName || 'Produto Escaneado',
+        brand: ocrData.brand || '',
+        servingSize: ocrData.servingSize || `${servingGrams}g`,
+        servingGrams: servingGrams,
+        per100g: {
+          calories: Math.round((Number(ocrData.calories) || 0) * ratio),
+          protein: Number(((Number(ocrData.protein) || 0) * ratio).toFixed(1)),
+          carbs: Number(((Number(ocrData.carbs) || 0) * ratio).toFixed(1)),
+          fat: Number(((Number(ocrData.fat) || 0) * ratio).toFixed(1)),
+          fiber: Number(((Number(ocrData.fiber) || 0) * ratio).toFixed(1)),
+          sodium: Number(((Number(ocrData.sodium) || 0) * ratio).toFixed(1)),
+        },
+        source: 'Rótulo OCR (Salvo no Banco)',
+      };
+
+      setProduct(converted);
+      setConsumedGrams(servingGrams);
+      setStatusInfo(null);
+      setErrorMsg(null);
+    } catch (err: any) {
+      console.error('Erro no OCR:', err);
+      setErrorMsg('Não foi possível extrair a tabela nutricional do rótulo: ' + err.message);
+    } finally {
+      setIsOcrLoading(false);
+    }
   };
 
   // Estimativa de nutrição com IA pelo nome do produto

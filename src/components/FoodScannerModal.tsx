@@ -16,6 +16,66 @@ import {
 import { FoodItem, MealLog, MealType, PrepState, MealSlot } from '../types';
 import { INITIAL_MEAL_SLOTS } from '../services/storage';
 
+// Redimensiona e comprime imagens de celular para ~200-400KB evitando erro HTTP 413 da Vercel (limite 4.5MB)
+async function compressImageClient(
+  fileOrDataUrl: File | string,
+  maxDimension = 1280,
+  quality = 0.82
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = (err) => reject(err);
+
+    if (typeof fileOrDataUrl === 'string') {
+      img.src = fileOrDataUrl;
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(fileOrDataUrl);
+    }
+  });
+}
+
+async function parseResponseSafely(res: Response): Promise<any> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.status === 413 || text.toLowerCase().includes('entity too large')) {
+      throw new Error('A foto enviada é muito grande. A imagem foi reduzida automaticamente, por favor clique em Analisar novamente.');
+    }
+    if (res.status === 504 || text.toLowerCase().includes('timeout')) {
+      throw new Error('O tempo limite de análise esgotou no servidor. Tente novamente com uma foto mais focada.');
+    }
+    throw new Error(text || `Erro no servidor (código ${res.status})`);
+  }
+}
+
 interface FoodScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -126,20 +186,28 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
     }
   };
 
-  const processImageFile = (file: File) => {
+  const processImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setAnalysisError('Por favor selecione um arquivo de imagem válido (JPG, PNG, WebP).');
       return;
     }
     setAnalysisError(null);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setCapturedImage(event.target.result as string);
-        stopCamera();
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Otimiza e comprime a foto no navegador antes de salvar no estado
+      const compressed = await compressImageClient(file, 1280, 0.82);
+      setCapturedImage(compressed);
+      stopCamera();
+    } catch (err: any) {
+      console.warn('Erro ao comprimir imagem, usando fallback:', err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setCapturedImage(event.target.result as string);
+          stopCamera();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,23 +240,25 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
     setAnalysisError(null);
 
     try {
+      // Garante imagem comprimida abaixo de 4.5MB (limite da Vercel)
+      const optimizedImage = await compressImageClient(capturedImage, 1280, 0.82);
+
       const res = await fetch('/api/gemini/analyze-meal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: capturedImage,
+          imageBase64: optimizedImage,
           mimeType: 'image/jpeg',
           notes: notes,
           mealType: mealType,
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Falha ao analisar imagem');
-      }
+      const result = await parseResponseSafely(res);
 
-      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Falha ao analisar imagem');
+      }
 
       setDetectedMealName(result.mealName || `Refeição com Reconhecimento IA`);
       setConfidenceScore(result.overallConfidence || 85);
