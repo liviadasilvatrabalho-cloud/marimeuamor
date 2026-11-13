@@ -17,9 +17,13 @@ import {
   ChevronUp,
   Zap,
   ZapOff,
+  ShieldCheck,
+  FileText,
+  Sliders,
+  HelpCircle,
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
-import { FoodItem, MealType, MealSlot } from '../types';
+import { FoodItem, MealType, MealSlot, NutritionSource } from '../types';
 import { INITIAL_MEAL_SLOTS } from '../services/storage';
 
 // Comprime fotos antes do envio evitando erro 413 da Vercel (limite 4.5MB)
@@ -73,10 +77,12 @@ async function parseResponseSafely(res: Response): Promise<any> {
     return JSON.parse(text);
   } catch {
     if (res.status === 413 || text.toLowerCase().includes('entity too large')) {
-      throw new Error('A foto enviada é muito grande. A imagem foi reduzida automaticamente, tente novamente.');
+      throw new Error(
+        'A foto enviada é muito pesada. O aplicativo a redimensionou, por favor tente novamente.'
+      );
     }
     if (res.status === 504 || text.toLowerCase().includes('timeout')) {
-      throw new Error('Tempo limite no servidor. Tente novamente com uma foto mais aproximada.');
+      throw new Error('Tempo limite no servidor. Tente novamente com uma foto mais nítida e aproximada.');
     }
     throw new Error(text || `Erro no servidor (código ${res.status})`);
   }
@@ -92,11 +98,13 @@ interface BarcodeScannerModalProps {
   onSaveCustomFood: (food: FoodItem) => void;
 }
 
-interface OpenFoodFactsResult {
+export interface ProductDetails {
   found: boolean;
   barcode: string;
   productName: string;
   brand: string;
+  category?: string;
+  packageSize?: string;
   servingSize: string;
   servingGrams: number;
   per100g: {
@@ -105,18 +113,27 @@ interface OpenFoodFactsResult {
     carbs: number;
     fat: number;
     fiber: number;
-    sodium?: number;
+    sodium?: number | null;
+    sugars?: number | null;
+    addedSugars?: number | null;
+    saturatedFat?: number | null;
+    transFat?: number | null;
   };
-  imageUrl?: string;
+  imageUrl?: string | null;
+  ingredients?: string | null;
   source: string;
+  verificationStatus?: string;
+  confidenceScore?: number;
+  provenance?: any;
+  lastUpdated?: string;
 }
 
 const COMMON_BRAZILIAN_BARCODES = [
   { name: 'Leite Moça Nestlé', code: '7891000100103' },
   { name: 'Aveia Quaker Flocos', code: '7891000244104' },
-  { name: 'Café Melitta', code: '7891021000109' },
-  { name: 'Iogurte Danone', code: '7891025114109' },
-  { name: 'Arroz Tio João', code: '7896006700010' },
+  { name: 'Café Melitta Tradicional', code: '7891021000109' },
+  { name: 'Iogurte Danone Natural', code: '7891025114109' },
+  { name: 'Arroz Tio João 1kg', code: '7896006700010' },
 ];
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
@@ -137,25 +154,27 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [statusInfo, setStatusInfo] = useState<string | null>(null);
   const [successSavedToast, setSuccessSavedToast] = useState<string | null>(null);
 
-  // Found or active product state
-  const [product, setProduct] = useState<OpenFoodFactsResult | null>(null);
+  // Active product state
+  const [product, setProduct] = useState<ProductDetails | null>(null);
   const [consumedGrams, setConsumedGrams] = useState<number>(100);
 
   const slots = mealSlots && mealSlots.length ? mealSlots : INITIAL_MEAL_SLOTS;
 
-  // Label OCR State fallback
+  // OCR Nutrition Table State
   const [isOcrLoading, setIsOcrLoading] = useState<boolean>(false);
-  const labelInputRef = useRef<HTMLInputElement | null>(null);
+  const [ocrReviewData, setOcrReviewData] = useState<any | null>(null);
+  const labelCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const labelGalleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Barcode Photo upload refs (Camera and Gallery)
+  // Barcode Photo upload refs
   const barcodeCameraInputRef = useRef<HTMLInputElement | null>(null);
   const barcodeGalleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  // AI Name estimation state
-  const [showAiEstimateForm, setShowAiEstimateForm] = useState<boolean>(false);
-  const [aiFoodName, setAiFoodName] = useState<string>('');
-  const [aiBrand, setAiBrand] = useState<string>('');
-  const [isAiEstimating, setIsAiEstimating] = useState<boolean>(false);
+  // Search by Name State (Prioridade 4)
+  const [showNameSearch, setShowNameSearch] = useState<boolean>(false);
+  const [searchNameQuery, setSearchNameQuery] = useState<string>('');
+  const [isSearchingName, setIsSearchingName] = useState<boolean>(false);
+  const [nameSearchResults, setNameSearchResults] = useState<ProductDetails[]>([]);
 
   // Manual fallback state
   const [isManualEntry, setIsManualEntry] = useState<boolean>(false);
@@ -167,8 +186,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     calories: 150,
     protein: 10,
     carbs: 20,
+    sugars: 0,
+    addedSugars: 0,
     fat: 5,
+    saturatedFat: 1,
+    transFat: 0,
     fiber: 2,
+    sodium: 50,
   });
 
   // Saved foods list toggle
@@ -199,10 +223,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setErrorMsg(null);
     setStatusInfo(null);
     setIsOcrLoading(false);
+    setOcrReviewData(null);
     setIsManualEntry(false);
-    setShowAiEstimateForm(false);
-    setAiFoodName('');
-    setAiBrand('');
+    setShowNameSearch(false);
+    setSearchNameQuery('');
+    setNameSearchResults([]);
     setSuccessSavedToast(null);
     setIsTorchOn(false);
     setHasTorch(false);
@@ -223,12 +248,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   const startBarcodeScanner = async () => {
     setErrorMsg(null);
-    setStatusInfo('Calibrando câmera de alta precisão...');
+    setStatusInfo('Calibrando câmera com leitor de código de barras...');
     setIsScanning(true);
     setIsTorchOn(false);
 
     try {
-      // Suporte completo a formatos de código de barras de alimentos
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
@@ -240,7 +264,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         Html5QrcodeSupportedFormats.QR_CODE,
       ];
 
-      // Habilita BarcodeDetector nativo por hardware do navegador quando disponível
       const scanner = new Html5Qrcode('barcode-scanner-viewport', {
         formatsToSupport,
         verbose: false,
@@ -250,7 +273,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       });
       scannerRef.current = scanner;
 
-      // Configuração de câmera de alta resolução e foco contínuo
       let cameraConfig: any = {
         facingMode: { ideal: 'environment' },
         width: { min: 640, ideal: 1920 },
@@ -272,7 +294,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           }
         }
       } catch (camErr) {
-        // Fallback to environment
+        // Fallback para environment
       }
 
       await scanner.start(
@@ -298,12 +320,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           setStatusInfo(`Código detectado: ${clean}`);
           fetchBarcodeData(clean);
         },
-        () => {
-          // Frame error (silencioso)
-        }
+        () => {}
       );
 
-      // Checa suporte a lanterna
       try {
         const capabilities = (scanner as any).getRunningTrackCapabilities?.();
         if (capabilities && 'torch' in capabilities) {
@@ -311,13 +330,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         }
       } catch {}
 
-      setStatusInfo('Aponte para o código de barras (mantenha a ~15cm)');
+      setStatusInfo('Aponte para as barras com boa luz (a cerca de 15cm)');
     } catch (err: any) {
       console.warn('Erro ao inicializar câmera do scanner:', err);
       setIsScanning(false);
       setStatusInfo(null);
       setErrorMsg(
-        'A câmera em tempo real não pôde ser iniciada. No celular isso geralmente ocorre porque o site não está em HTTPS (a câmera exige conexão segura). Use "Tirar Foto" ou "Galeria" abaixo, ou digite o número do código manualmente.'
+        'A câmera em tempo real não pôde ser iniciada (navegadores exigem conexão segura HTTPS). Utilize "Tirar Foto" ou "Galeria" abaixo, ou digite o número do código.'
       );
     }
   };
@@ -329,14 +348,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           await scannerRef.current.stop();
         }
         scannerRef.current.clear();
-      } catch (e) {
-        // Ignored
-      }
+      } catch (e) {}
       scannerRef.current = null;
     }
     setIsScanning(false);
   };
 
+  // SISTEMA DE CONSULTA EM CASCATA COM PRIORIDADES OFICIAIS
   const fetchBarcodeData = async (code: string) => {
     const clean = code.trim();
     if (!clean) return;
@@ -344,10 +362,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setScannedCode(clean);
     setIsLoading(true);
     setErrorMsg(null);
-    setStatusInfo(`Buscando ${clean} nas bases de alimentos...`);
+    setStatusInfo(`Buscando ${clean} (Prioridade 1: Banco Local)...`);
     setProduct(null);
 
-    // 1. Verificar primeiro na lista local em memória customFoods
+    // PRIORIDADE 1 — BANCO DE DADOS PRÓPRIO (Verificação imediata em memória/cache local)
     const foundCustom = customFoods.find((f) => f.barcode === clean);
     if (foundCustom) {
       const serving = foundCustom.portionGrams || 100;
@@ -357,7 +375,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         carbs: Number((((foundCustom.carbs || 0) / serving) * 100).toFixed(1)),
         fat: Number((((foundCustom.fat || 0) / serving) * 100).toFixed(1)),
         fiber: Number((((foundCustom.fiber || 0) / serving) * 100).toFixed(1)),
+        sodium: foundCustom.sodium,
+        sugars: foundCustom.sugars,
+        addedSugars: foundCustom.addedSugars,
+        saturatedFat: foundCustom.saturatedFat,
+        transFat: foundCustom.transFat,
       };
+
       setProduct({
         found: true,
         barcode: clean,
@@ -371,8 +395,20 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           carbs: p100.carbs || 0,
           fat: p100.fat || 0,
           fiber: p100.fiber || 0,
+          sodium: p100.sodium != null ? p100.sodium : null,
+          sugars: p100.sugars != null ? p100.sugars : null,
+          addedSugars: p100.addedSugars != null ? p100.addedSugars : null,
+          saturatedFat: p100.saturatedFat != null ? p100.saturatedFat : null,
+          transFat: p100.transFat != null ? p100.transFat : null,
         },
-        source: 'Seu Banco de Dados',
+        source: 'Banco Local',
+        verificationStatus: 'verified',
+        confidenceScore: 100,
+        provenance: foundCustom.provenance || {
+          barcodeSource: 'scanner',
+          nutritionSource: 'Banco Local',
+          verifiedStatus: 'verified',
+        },
       });
       setConsumedGrams(serving);
       setStatusInfo(null);
@@ -380,14 +416,16 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       return;
     }
 
+    // Consulta ao backend: PRIORIDADE 1 (Postgres) -> PRIORIDADE 2 (Open Food Facts) -> PRIORIDADE 3 (FatSecret)
     try {
+      setStatusInfo(`Consultando bases oficiais para ${clean}...`);
       const res = await fetch(`/api/barcode/${clean}`);
       const data = await res.json();
 
       if (!res.ok || !data.found) {
         setErrorMsg(
           data.message ||
-            `Produto com código "${clean}" não consta na base pública Open Food Facts.`
+            `Produto com código "${clean}" não foi encontrado automaticamente.`
         );
         return;
       }
@@ -396,14 +434,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       setConsumedGrams(data.servingGrams || 100);
       setStatusInfo(null);
     } catch (err: any) {
-      console.error('Erro na consulta:', err);
-      setErrorMsg('Falha de conexão com a base de dados.');
+      console.error('Erro na consulta em cascata:', err);
+      setErrorMsg('Falha de conexão com os serviços de consulta nutricional.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Process barcode from image file
+  // Processar foto de código de barras
   const handleBarcodeImageFile = async (file: File) => {
     if (!file) return;
 
@@ -412,7 +450,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setStatusInfo('Identificando código de barras na fotografia...');
 
     try {
-      // 1. Tentar decodificação local primeiro
       try {
         const formatsToSupport = [
           Html5QrcodeSupportedFormats.EAN_13,
@@ -441,7 +478,6 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         // Fallback Gemini
       }
 
-      // 2. Multimodal Gemini Vision Reader com compressão client-side
       setStatusInfo('Decodificando números do código de barras com IA...');
       const compressedBase64 = await compressImageClient(file, 1400, 0.85);
 
@@ -456,7 +492,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
       const aiData = await parseResponseSafely(res);
       if (!res.ok) {
-        setErrorMsg(aiData.error || 'Serviço de leitura por foto indisponível no momento.');
+        setErrorMsg(aiData.error || 'Serviço de leitura por foto indisponível.');
         return;
       }
       if (aiData && aiData.found && aiData.barcode) {
@@ -468,7 +504,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       } else {
         setErrorMsg(
           aiData.reason ||
-            'Não foi possível identificar as barras na foto. Tente tirar uma foto mais nítida ou digite os números abaixo.'
+            'Não foi possível identificar o código de barras na foto. Tente aproximar ou use uma das opções de recuperação abaixo.'
         );
       }
     } catch (err: any) {
@@ -485,113 +521,262 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }
   };
 
-  // OCR de rótulo com Gemini para produtos não encontrados
-  const handleLabelImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // 3. LEITURA AUTOMÁTICA DA TABELA NUTRICIONAL POR FOTO (Gemini API)
+  const handleLabelImageUpload = async (file: File) => {
     if (!file) return;
 
     setIsOcrLoading(true);
     setErrorMsg(null);
-    setStatusInfo('Lendo tabela nutricional do rótulo com IA...');
+    setStatusInfo('Lendo tabela nutricional da embalagem com IA (Normas ANVISA)...');
 
     try {
       const compressedBase64 = await compressImageClient(file, 1400, 0.85);
+      const effectiveBarcode = scannedCode || manualCode || '';
+
       const res = await fetch('/api/gemini/ocr-label', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: compressedBase64,
           mimeType: 'image/jpeg',
+          barcode: effectiveBarcode,
+          productNameHint: manualForm.name || '',
+          brandHint: manualForm.brand || '',
         }),
       });
 
       const ocrData = await parseResponseSafely(res);
 
       if (!res.ok) {
-        throw new Error(ocrData.error || 'Erro ao ler rótulo');
+        throw new Error(ocrData.error || 'Erro ao processar imagem');
       }
 
-      const servingGrams = Number(ocrData.servingGrams) || 100;
-      const ratio = 100 / servingGrams;
+      // Regra obrigatória: identificar fotografia ilegível
+      if (ocrData.isLegible === false) {
+        setErrorMsg(
+          ocrData.illegibleReason ||
+            'A fotografia da tabela ficou embaçada ou cortada. Por favor, aproxime a câmera da tabela nutricional sob boa luz e tente novamente.'
+        );
+        return;
+      }
 
-      const effectiveBarcode = scannedCode || manualCode || `AUTO-${Date.now()}`;
-
-      const converted: OpenFoodFactsResult = {
-        found: true,
-        barcode: effectiveBarcode,
-        productName: ocrData.productName || 'Produto Escaneado',
-        brand: ocrData.brand || '',
-        servingSize: ocrData.servingSize || `${servingGrams}g`,
-        servingGrams: servingGrams,
-        per100g: {
-          calories: Math.round((Number(ocrData.calories) || 0) * ratio),
-          protein: Number(((Number(ocrData.protein) || 0) * ratio).toFixed(1)),
-          carbs: Number(((Number(ocrData.carbs) || 0) * ratio).toFixed(1)),
-          fat: Number(((Number(ocrData.fat) || 0) * ratio).toFixed(1)),
-          fiber: Number(((Number(ocrData.fiber) || 0) * ratio).toFixed(1)),
-          sodium: Number(((Number(ocrData.sodium) || 0) * ratio).toFixed(1)),
-        },
-        source: 'Rótulo OCR (Salvo no Banco)',
-      };
-
-      setProduct(converted);
-      setConsumedGrams(servingGrams);
+      // Abre tela de revisão estruturada para a usuária conferir antes de salvar
+      setOcrReviewData(ocrData);
       setStatusInfo(null);
-      setErrorMsg(null);
     } catch (err: any) {
-      console.error('Erro no OCR:', err);
-      setErrorMsg('Não foi possível extrair a tabela nutricional do rótulo: ' + err.message);
+      console.error('Erro no OCR de rótulo:', err);
+      setErrorMsg('Falha ao extrair tabela nutricional: ' + err.message);
     } finally {
       setIsOcrLoading(false);
     }
   };
 
-  // Estimativa de nutrição com IA pelo nome do produto
-  const handleEstimateWithAi = async () => {
-    const name = aiFoodName.trim();
-    if (!name) return;
+  // Confirmar dados revisados do OCR da tabela e salvar no banco
+  const handleConfirmOcrAndSave = async () => {
+    if (!ocrReviewData) return;
 
-    setIsAiEstimating(true);
-    setErrorMsg(null);
-    setStatusInfo(`Consultando tabelas TACO/TBCA por IA para "${name}"...`);
+    setIsLoading(true);
+    setStatusInfo('Gravando produto com tabela nutricional no banco de dados...');
 
     try {
-      const effectiveBarcode = scannedCode || manualCode || '';
-      const res = await fetch('/api/gemini/estimate-food-nutrition', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          foodName: name,
-          brand: aiBrand.trim(),
-          barcode: effectiveBarcode,
-        }),
-      });
+      const servingGrams = Number(ocrReviewData.portion?.servingQuantity) || 100;
+      const servingUnit = ocrReviewData.portion?.servingSize || `${servingGrams}g`;
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Erro ao estimar valores nutricionais');
+      const p100 = ocrReviewData.per100g || {};
+      const effectiveBarcode = ocrReviewData.barcode || scannedCode || manualCode || `AUTO-${Date.now()}`;
+
+      const payload = {
+        barcode: effectiveBarcode,
+        productName: ocrReviewData.productName || 'Alimento Registrado por Rótulo',
+        brand: ocrReviewData.brand || '',
+        servingSize: servingUnit,
+        servingGrams,
+        per100g: p100,
+        ingredients: ocrReviewData.ingredientsList || '',
+        source: 'IA Gemini',
+        verificationStatus: 'user_confirmed',
+        confidenceScore: ocrReviewData.confidence?.overall || 90,
+        provenance: {
+          barcodeSource: scannedCode ? 'scanner' : 'manual',
+          nutritionSource: 'gemini_ocr',
+          nameSource: ocrReviewData.productName ? 'user_confirmed' : 'user',
+          confidenceScore: ocrReviewData.confidence?.overall || 90,
+          verifiedStatus: 'user_confirmed',
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // 1. Salva no banco de dados Neon Postgres (UPSERT sem duplicações)
+      try {
+        await fetch('/api/barcode/save-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (dbErr) {
+        console.warn('Salvamento Postgres offline ou parcial:', dbErr);
       }
 
-      const data = await res.json();
+      // 2. Salva no estado customFoods local
+      const customFoodItem: FoodItem = {
+        id: `food-${Date.now()}`,
+        name: payload.productName,
+        brand: payload.brand,
+        barcode: payload.barcode,
+        prepState: 'cru',
+        portionGrams: servingGrams,
+        calories: Math.round((Number(p100.calories || 0) * servingGrams) / 100),
+        protein: Number((((Number(p100.protein) || 0) * servingGrams) / 100).toFixed(1)),
+        carbs: Number((((Number(p100.carbs) || 0) * servingGrams) / 100).toFixed(1)),
+        fat: Number((((Number(p100.fat) || 0) * servingGrams) / 100).toFixed(1)),
+        fiber: Number((((Number(p100.fiber) || 0) * servingGrams) / 100).toFixed(1)),
+        sodium: p100.sodium != null ? Math.round((Number(p100.sodium) * servingGrams) / 100) : undefined,
+        sugars: p100.sugars != null ? Number((((Number(p100.sugars) || 0) * servingGrams) / 100).toFixed(1)) : undefined,
+        addedSugars: p100.addedSugars != null ? Number((((Number(p100.addedSugars) || 0) * servingGrams) / 100).toFixed(1)) : undefined,
+        saturatedFat: p100.saturatedFat != null ? Number((((Number(p100.saturatedFat) || 0) * servingGrams) / 100).toFixed(1)) : undefined,
+        transFat: p100.transFat != null ? Number((((Number(p100.transFat) || 0) * servingGrams) / 100).toFixed(1)) : undefined,
+        per100g: p100,
+        source: 'IA Gemini',
+        verified: true,
+        confidenceScore: payload.confidenceScore,
+        provenance: payload.provenance,
+      };
+
+      onSaveCustomFood(customFoodItem);
+
+      // Carrega o produto ativo já pronto para ser usado e adicionado à refeição
       setProduct({
-        ...data,
-        barcode: effectiveBarcode || data.barcode || `AUTO-${Date.now()}`,
+        found: true,
+        barcode: payload.barcode,
+        productName: payload.productName,
+        brand: payload.brand,
+        servingSize: payload.servingSize,
+        servingGrams,
+        per100g: p100,
+        source: 'Banco Local (IA Gemini)',
+        verificationStatus: 'user_confirmed',
+        confidenceScore: payload.confidenceScore,
+        provenance: payload.provenance,
       });
-      setConsumedGrams(data.servingGrams || 100);
-      setStatusInfo(null);
-      setShowAiEstimateForm(false);
-      setErrorMsg(null);
+
+      setConsumedGrams(servingGrams);
+      setOcrReviewData(null);
+      setSuccessSavedToast('Produto e tabela nutricional salvos no banco com sucesso!');
+      setTimeout(() => setSuccessSavedToast(null), 4000);
     } catch (err: any) {
-      console.error('Erro na estimativa IA:', err);
-      setErrorMsg('Falha na estimativa por IA: ' + err.message);
+      setErrorMsg('Erro ao salvar produto revisado: ' + err.message);
     } finally {
-      setIsAiEstimating(false);
+      setIsLoading(false);
+      setStatusInfo(null);
     }
   };
 
-  // Cálculos dinâmicos em tempo real conforme grams consumidos mudam
+  // PRIORIDADE 4 — BUSCA COMPLEMENTAR POR NOME OU MARCA
+  const handleSearchByName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = searchNameQuery.trim();
+    if (!query) return;
+
+    setIsSearchingName(true);
+    setErrorMsg(null);
+    setNameSearchResults([]);
+
+    try {
+      const res = await fetch(`/api/barcode/search-by-name?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNameSearchResults(data.items || []);
+        if (!data.items || data.items.length === 0) {
+          setErrorMsg(`Nenhum alimento encontrado com o nome "${query}".`);
+        }
+      } else {
+        setErrorMsg('Erro ao buscar alimentos pelo nome.');
+      }
+    } catch (err: any) {
+      setErrorMsg('Falha na busca por nome: ' + err.message);
+    } finally {
+      setIsSearchingName(false);
+    }
+  };
+
+  // Selecionar resultado da busca por nome
+  const handleSelectNameResult = (item: ProductDetails) => {
+    // Preserva o código de barras original escaneado se o item escolhido não tiver
+    const effectiveBarcode = scannedCode || item.barcode || '';
+    setProduct({
+      ...item,
+      barcode: effectiveBarcode,
+    });
+    setConsumedGrams(item.servingGrams || 100);
+    setShowNameSearch(false);
+    setErrorMsg(null);
+  };
+
+  // Salvar produto encontrado no banco próprio para evitar novas chamadas externas
+  const handleSaveProductToDatabase = async () => {
+    if (!product) return;
+
+    try {
+      const payload = {
+        barcode: product.barcode,
+        productName: product.productName,
+        brand: product.brand,
+        servingSize: product.servingSize,
+        servingGrams: product.servingGrams,
+        per100g: product.per100g,
+        imageUrl: product.imageUrl,
+        source: product.source || 'Banco Local',
+        verificationStatus: product.verificationStatus || 'verified',
+        confidenceScore: product.confidenceScore || 100,
+        provenance: product.provenance || {
+          barcodeSource: 'scanner',
+          nutritionSource: product.source,
+          nameSource: 'verified',
+          savedAt: new Date().toISOString(),
+        },
+      };
+
+      await fetch('/api/barcode/save-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const customFoodItem: FoodItem = {
+        id: `food-${Date.now()}`,
+        name: product.productName,
+        brand: product.brand,
+        barcode: product.barcode,
+        prepState: 'cru',
+        portionGrams: product.servingGrams || 100,
+        calories: Math.round((Number(product.per100g.calories || 0) * (product.servingGrams || 100)) / 100),
+        protein: Number((((Number(product.per100g.protein) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)),
+        carbs: Number((((Number(product.per100g.carbs) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)),
+        fat: Number((((Number(product.per100g.fat) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)),
+        fiber: Number((((Number(product.per100g.fiber) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)),
+        sodium: product.per100g.sodium != null ? Math.round((Number(product.per100g.sodium) * (product.servingGrams || 100)) / 100) : undefined,
+        sugars: product.per100g.sugars != null ? Number((((Number(product.per100g.sugars) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)) : undefined,
+        addedSugars: product.per100g.addedSugars != null ? Number((((Number(product.per100g.addedSugars) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)) : undefined,
+        saturatedFat: product.per100g.saturatedFat != null ? Number((((Number(product.per100g.saturatedFat) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)) : undefined,
+        transFat: product.per100g.transFat != null ? Number((((Number(product.per100g.transFat) || 0) * (product.servingGrams || 100)) / 100).toFixed(1)) : undefined,
+        per100g: product.per100g,
+        source: 'Banco Local',
+        verified: true,
+      };
+
+      onSaveCustomFood(customFoodItem);
+      setProduct((prev) => (prev ? { ...prev, source: 'Banco Local' } : null));
+
+      setSuccessSavedToast('Produto salvo no seu banco de dados para reuso imediato!');
+      setTimeout(() => setSuccessSavedToast(null), 3500);
+    } catch (err: any) {
+      console.warn('Erro ao salvar no banco:', err);
+    }
+  };
+
+  // Cálculos dinâmicos em tempo real conforme gramas consumidos mudam
   const calculateMacrosForConsumed = () => {
-    if (!product) return { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+    if (!product) return { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sodium: 0, sugars: 0, saturatedFat: 0 };
     const ratio = Math.max(0, consumedGrams || 0) / 100;
     return {
       calories: Math.round(product.per100g.calories * ratio),
@@ -599,18 +784,20 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       carbs: Number((product.per100g.carbs * ratio).toFixed(1)),
       fat: Number((product.per100g.fat * ratio).toFixed(1)),
       fiber: Number((product.per100g.fiber * ratio).toFixed(1)),
+      sodium: product.per100g.sodium != null ? Math.round(product.per100g.sodium * ratio) : null,
+      sugars: product.per100g.sugars != null ? Number((product.per100g.sugars * ratio).toFixed(1)) : null,
+      saturatedFat: product.per100g.saturatedFat != null ? Number((product.per100g.saturatedFat * ratio).toFixed(1)) : null,
     };
   };
 
   const currentMacros = calculateMacrosForConsumed();
 
-  // Ajustes rápidos de gramas (+10g, -10g, etc.)
   const adjustGrams = (delta: number) => {
     setConsumedGrams((prev) => Math.max(1, Math.min(2500, (prev || 0) + delta)));
   };
 
-  // Salvar alimento na refeição e guardar no banco de dados para reuso
-  const handleConfirmAdd = () => {
+  // Salvar alimento na refeição e guardar no banco
+  const handleConfirmAdd = async () => {
     if (!product) return;
 
     const effectiveBarcode = product.barcode || scannedCode || manualCode || undefined;
@@ -620,14 +807,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       name: product.productName || 'Alimento Registrado',
       brand: product.brand || undefined,
       barcode: effectiveBarcode,
-      per100g: {
-        calories: product.per100g?.calories,
-        protein: product.per100g?.protein,
-        carbs: product.per100g?.carbs,
-        fat: product.per100g?.fat,
-        fiber: product.per100g?.fiber,
-        sodium: product.per100g?.sodium,
-      },
+      per100g: product.per100g,
       prepState: 'cru',
       portionGrams: Math.max(1, consumedGrams),
       calories: currentMacros.calories,
@@ -635,25 +815,30 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       carbs: currentMacros.carbs,
       fat: currentMacros.fat,
       fiber: currentMacros.fiber,
-      source: (product.source as any) || 'Open Food Facts',
+      sodium: currentMacros.sodium ?? undefined,
+      sugars: currentMacros.sugars ?? undefined,
+      saturatedFat: currentMacros.saturatedFat ?? undefined,
+      source: (product.source as any) || 'Banco Local',
       verified: true,
+      confidenceScore: product.confidenceScore,
+      provenance: product.provenance,
     };
 
     // 1. Salva na refeição atual
     onSaveMealItem(foodItem, mealType);
 
-    // 2. Salva no banco de dados para reuso sem precisar escanear de novo
+    // 2. Persiste no banco de dados para reuso futuro
     onSaveCustomFood(foodItem);
+    handleSaveProductToDatabase();
 
     onClose();
   };
 
   // Salvar cadastro manual
-  const handleSaveManualForm = () => {
+  const handleSaveManualForm = async () => {
     const portion = Math.max(1, manualForm.servingGrams || 100);
     const ratio = 100 / portion;
-    const effectiveBarcode =
-      manualForm.barcode.trim() || scannedCode || manualCode || undefined;
+    const effectiveBarcode = manualForm.barcode.trim() || scannedCode || manualCode || undefined;
 
     const per100g = {
       calories: Math.round(manualForm.calories * ratio),
@@ -661,6 +846,11 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       carbs: Number((manualForm.carbs * ratio).toFixed(1)),
       fat: Number((manualForm.fat * ratio).toFixed(1)),
       fiber: Number((manualForm.fiber * ratio).toFixed(1)),
+      sodium: Math.round(manualForm.sodium * ratio),
+      sugars: Number((manualForm.sugars * ratio).toFixed(1)),
+      addedSugars: Number((manualForm.addedSugars * ratio).toFixed(1)),
+      saturatedFat: Number((manualForm.saturatedFat * ratio).toFixed(1)),
+      transFat: Number((manualForm.transFat * ratio).toFixed(1)),
     };
 
     const foodItem: FoodItem = {
@@ -675,17 +865,49 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       carbs: manualForm.carbs,
       fat: manualForm.fat,
       fiber: manualForm.fiber,
+      sodium: manualForm.sodium,
+      sugars: manualForm.sugars,
+      addedSugars: manualForm.addedSugars,
+      saturatedFat: manualForm.saturatedFat,
+      transFat: manualForm.transFat,
       per100g,
       source: 'Manual',
       verified: true,
+      provenance: {
+        barcodeSource: effectiveBarcode ? 'scanner' : 'manual',
+        nutritionSource: 'manual',
+        nameSource: 'user',
+        verifiedStatus: 'user_confirmed',
+        updatedAt: new Date().toISOString(),
+      },
     };
 
     onSaveMealItem(foodItem, mealType);
     onSaveCustomFood(foodItem);
+
+    // Persiste também no Postgres
+    if (effectiveBarcode) {
+      try {
+        await fetch('/api/barcode/save-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            barcode: effectiveBarcode,
+            productName: foodItem.name,
+            brand: foodItem.brand,
+            servingGrams: portion,
+            per100g,
+            source: 'Manual',
+            verificationStatus: 'user_confirmed',
+          }),
+        });
+      } catch (e) {}
+    }
+
     onClose();
   };
 
-  // Carregar um alimento previamente salvo direto do banco local
+  // Carregar um alimento previamente salvo do banco local
   const handleSelectSavedFood = (item: FoodItem) => {
     const serving = item.portionGrams || 100;
     const p100 = item.per100g || {
@@ -694,6 +916,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       carbs: Number((((item.carbs || 0) / serving) * 100).toFixed(1)),
       fat: Number((((item.fat || 0) / serving) * 100).toFixed(1)),
       fiber: Number((((item.fiber || 0) / serving) * 100).toFixed(1)),
+      sodium: item.sodium,
+      sugars: item.sugars,
+      saturatedFat: item.saturatedFat,
     };
 
     setProduct({
@@ -709,8 +934,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         carbs: p100.carbs || 0,
         fat: p100.fat || 0,
         fiber: p100.fiber || 0,
+        sodium: p100.sodium,
+        sugars: p100.sugars,
+        saturatedFat: p100.saturatedFat,
       },
-      source: 'Seu Banco de Dados',
+      source: 'Banco Local',
+      verificationStatus: 'verified',
     });
     setConsumedGrams(serving);
     setErrorMsg(null);
@@ -722,6 +951,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="relative w-full max-w-xl bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe shadow-2xl max-h-[94vh] overflow-y-auto overflow-x-hidden">
+        {/* Toast de sucesso */}
+        {successSavedToast && (
+          <div className="absolute top-4 left-4 right-4 z-50 p-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold shadow-xl flex items-center justify-center gap-2 animate-fadeIn">
+            <ShieldCheck className="w-4 h-4" />
+            <span>{successSavedToast}</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[#33263F]">
           <div className="flex items-center gap-2.5">
@@ -730,30 +967,30 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-[#F8F5FC]">
-                Scanner de Código de Barras & Rótulos
+                Leitor & Cadastro Inteligente de Alimentos
               </h2>
               <p className="text-xs text-[#B8AFC4]">
-                Reconhecimento instantâneo, OCR por foto e salvamento no banco
+                Busca automática no banco, Open Food Facts e OCR de rótulo por IA
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#22192C] transition-colors"
+            className="p-2 rounded-xl text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#22192C] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Temp off-screen element for barcode file decoding */}
+        {/* Elemento temporário para decodificação de arquivo */}
         <div id="barcode-file-scan-temp" style={{ position: 'absolute', left: '-9999px', top: 0 }} />
 
-        {/* Body */}
+        {/* Conteúdo */}
         <div className="py-4 space-y-4">
-          {/* Meal selector */}
+          {/* Seletor de refeição */}
           <div>
             <label className="text-xs font-medium text-[#B8AFC4] block mb-1.5">
-              Adicionar em qual refeição?
+              Registrar em qual refeição?
             </label>
             <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-1.5">
               {slots.map((slot) => (
@@ -774,13 +1011,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </div>
           </div>
 
-          {!product && !isManualEntry && (
+          {/* ESTADO 1: SCANNER DE CÂMERA E ENTRADA DE CÓDIGO */}
+          {!product && !ocrReviewData && !isManualEntry && !showNameSearch && (
             <>
-              {/* Camera Scanner Viewport */}
+              {/* Viewport da câmera */}
               <div className="relative rounded-2xl bg-[#100C16] border border-[#33263F] overflow-hidden min-h-[200px] flex flex-col items-center justify-center p-4">
                 <div id="barcode-scanner-viewport" className="w-full max-w-sm rounded-xl overflow-hidden relative" />
 
-                {/* Laser scan reticle animation when camera is scanning */}
+                {/* Retículo de mira com linha laser animada */}
                 {isScanning && (
                   <div className="pointer-events-none absolute inset-x-8 inset-y-10 flex flex-col justify-between border-2 border-[#8B5CF6]/50 rounded-2xl overflow-hidden shadow-[0_0_25px_rgba(139,92,246,0.25)]">
                     <div className="flex justify-between p-2">
@@ -802,10 +1040,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-[#F8F5FC]">
-                        Ler código de barras do produto
+                        Escanear código de barras do alimento
                       </p>
                       <p className="text-xs text-[#B8AFC4] mt-0.5 max-w-sm mx-auto">
-                        Câmera de alta precisão com suporte a EAN-13, EAN-8, UPC e foto.
+                        Suporte a EAN-13, EAN-8, UPC e foto com câmera de alta resolução.
                       </p>
                     </div>
 
@@ -873,7 +1111,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 </div>
               )}
 
-              {/* Hidden file inputs for barcode photos */}
+              {/* Inputs invisíveis para fotos de código de barras */}
               <input
                 ref={barcodeCameraInputRef}
                 type="file"
@@ -899,10 +1137,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 className="hidden"
               />
 
-              {/* Manual Barcode Input Form */}
+              {/* Campo para digitação de código */}
               <form onSubmit={handleManualSearch} className="space-y-1.5">
                 <label className="text-xs font-medium text-[#B8AFC4]">
-                  Ou digite o código de barras manualmente:
+                  Ou digite os números do código de barras:
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -928,7 +1166,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 </div>
               </form>
 
-              {/* FALLBACK OPTIONS WHEN NOT FOUND */}
+              {/* FLUXO INTELIGENTE DE RECUPERAÇÃO / FALLBACK (Nunca apresenta erro simples) */}
               {errorMsg && (
                 <div className="p-4 rounded-2xl bg-[#100C16] border border-amber-500/40 text-xs space-y-3 animate-fadeIn">
                   <div className="flex items-start gap-2.5 text-amber-300">
@@ -936,40 +1174,40 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     <div>
                       <p className="font-semibold text-amber-200">
                         {scannedCode
-                          ? `Código ${scannedCode} não consta no Open Food Facts.`
-                          : 'Produto não encontrado na base pública.'}
+                          ? `Código ${scannedCode} não localizado nas bases públicas.`
+                          : 'Produto não localizado nas bases automáticas.'}
                       </p>
                       <p className="text-[11px] text-[#B8AFC4] mt-0.5">
-                        Não tem problema! Escolha uma das opções abaixo para capturar a tabela nutricional. O produto será{' '}
-                        <strong className="text-white">salvo no seu banco de dados</strong> para você nunca mais precisar escanear:
+                        Não se preocupe! O aplicativo preservou o seu código de barras. Escolha como completar as informações para que o produto seja{' '}
+                        <strong className="text-white">salvo no banco de dados</strong> e você nunca mais precise escanear:
                       </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                    {/* Opção 1: OCR por foto da tabela */}
+                    {/* AÇÃO 1: Fotografar tabela nutricional (Gemini OCR) */}
                     <button
                       type="button"
-                      onClick={() => labelInputRef.current?.click()}
-                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-[#18121F] border border-[#8B5CF6]/50 hover:bg-[#22192C] text-[#A78BFA] transition-all cursor-pointer text-center group"
+                      onClick={() => labelCameraInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-[#18121F] border border-[#8B5CF6]/60 hover:bg-[#22192C] text-[#A78BFA] transition-all cursor-pointer text-center group"
                     >
-                      <Camera className="w-4 h-4 text-[#EC4899] group-hover:scale-110 transition-transform" />
-                      <span className="font-semibold text-xs text-[#F8F5FC]">Fotografar Rótulo</span>
-                      <span className="text-[10px] text-[#B8AFC4]">OCR com IA extrai os nutrientes</span>
+                      <Camera className="w-5 h-5 text-[#EC4899] group-hover:scale-110 transition-transform" />
+                      <span className="font-bold text-xs text-[#F8F5FC]">Fotografar Tabela</span>
+                      <span className="text-[10px] text-[#B8AFC4]">IA extrai todos os macros</span>
                     </button>
 
-                    {/* Opção 2: Estimativa por IA pelo nome */}
+                    {/* AÇÃO 2: Buscar pelo nome ou marca */}
                     <button
                       type="button"
-                      onClick={() => setShowAiEstimateForm(!showAiEstimateForm)}
-                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-[#18121F] border border-emerald-500/40 hover:bg-[#22192C] text-emerald-400 transition-all cursor-pointer text-center group"
+                      onClick={() => setShowNameSearch(true)}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-[#18121F] border border-emerald-500/50 hover:bg-[#22192C] text-emerald-400 transition-all cursor-pointer text-center group"
                     >
-                      <Sparkles className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                      <span className="font-semibold text-xs text-[#F8F5FC]">Estimar com IA</span>
-                      <span className="text-[10px] text-[#B8AFC4]">Digite o nome do produto</span>
+                      <Search className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                      <span className="font-bold text-xs text-[#F8F5FC]">Buscar por Nome</span>
+                      <span className="text-[10px] text-[#B8AFC4]">Encontrar alimento brasileiro</span>
                     </button>
 
-                    {/* Opção 3: Digitar Manualmente */}
+                    {/* AÇÃO 3: Digitar manualmente */}
                     <button
                       type="button"
                       onClick={() => {
@@ -981,70 +1219,48 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       }}
                       className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-[#18121F] border border-[#33263F] hover:bg-[#22192C] text-[#F8F5FC] transition-all cursor-pointer text-center group"
                     >
-                      <Plus className="w-4 h-4 text-[#A78BFA] group-hover:scale-110 transition-transform" />
-                      <span className="font-semibold text-xs text-[#F8F5FC]">Digitar Macros</span>
-                      <span className="text-[10px] text-[#B8AFC4]">Preencha a tabela você mesmo</span>
+                      <Plus className="w-5 h-5 text-[#A78BFA] group-hover:scale-110 transition-transform" />
+                      <span className="font-bold text-xs text-[#F8F5FC]">Digitar Dados</span>
+                      <span className="text-[10px] text-[#B8AFC4]">Preenchimento guiado</span>
                     </button>
                   </div>
-
-                  {/* Formulário de estimativa com IA */}
-                  {showAiEstimateForm && (
-                    <div className="p-3 rounded-xl bg-[#18121F] border border-emerald-500/30 space-y-2 mt-2">
-                      <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Qual é o nome do produto?</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          value={aiFoodName}
-                          onChange={(e) => setAiFoodName(e.target.value)}
-                          placeholder="Ex: Iogurte Natural Desnatado"
-                          className="px-3 py-2 rounded-lg bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-emerald-500"
-                        />
-                        <input
-                          type="text"
-                          value={aiBrand}
-                          onChange={(e) => setAiBrand(e.target.value)}
-                          placeholder="Marca (opcional, ex: Nestlé)"
-                          className="px-3 py-2 rounded-lg bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleEstimateWithAi}
-                        disabled={isAiEstimating || !aiFoodName.trim()}
-                        className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        {isAiEstimating ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3.5 h-3.5" />
-                        )}
-                        <span>Obter Tabela Nutricional por IA</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* Input invisível para upload de foto do rótulo OCR */}
+              {/* Inputs para fotografar rótulo/tabela nutricional */}
               <input
-                ref={labelInputRef}
+                ref={labelCameraInputRef}
                 type="file"
                 accept="image/*"
-                onChange={handleLabelImageUpload}
+                capture="environment"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleLabelImageUpload(f);
+                  e.target.value = '';
+                }}
+                className="hidden"
+              />
+
+              <input
+                ref={labelGalleryInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleLabelImageUpload(f);
+                  e.target.value = '';
+                }}
                 className="hidden"
               />
 
               {isOcrLoading && (
-                <div className="p-4 rounded-xl bg-[#100C16] border border-[#8B5CF6]/40 flex items-center justify-center gap-2 text-xs text-[#A78BFA]">
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Extraindo tabela nutricional do rótulo com IA...</span>
+                <div className="p-4 rounded-xl bg-[#100C16] border border-[#8B5CF6]/50 flex items-center justify-center gap-2 text-xs text-[#A78BFA]">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#EC4899]" />
+                  <span>Extraindo valores nutricionais da tabela com IA (Normas ANVISA)...</span>
                 </div>
               )}
 
-              {/* Seção de produtos previamente salvos no banco local */}
+              {/* Seção de produtos previamente salvos no banco de dados */}
               {customFoods.length > 0 && (
                 <div className="pt-2 border-t border-[#33263F]/60">
                   <button
@@ -1054,13 +1270,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   >
                     <div className="flex items-center gap-1.5">
                       <Database className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Meus Alimentos Salvos no Banco ({customFoods.length})</span>
+                      <span>Meus Alimentos Cadastrados no Banco ({customFoods.length})</span>
                     </div>
-                    {showSavedList ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
+                    {showSavedList ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
 
                   {showSavedList && (
@@ -1069,7 +1281,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         <div
                           key={saved.id}
                           onClick={() => handleSelectSavedFood(saved)}
-                          className="p-2 rounded-xl bg-[#100C16] hover:bg-[#22192C] border border-[#33263F] flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                          className="p-2.5 rounded-xl bg-[#100C16] hover:bg-[#22192C] border border-[#33263F] flex items-center justify-between gap-2 cursor-pointer transition-colors"
                         >
                           <div className="min-w-0">
                             <p className="text-xs font-semibold text-[#F8F5FC] truncate">
@@ -1095,10 +1307,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 </div>
               )}
 
-              {/* Exemplos rápidos para testar a base */}
+              {/* Exemplos para teste */}
               <div className="space-y-1.5 pt-1">
                 <span className="text-[11px] text-[#B8AFC4] block">
-                  Exemplos para testar busca de código de barras:
+                  Exemplos para testar o fluxo de código de barras:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {COMMON_BRAZILIAN_BARCODES.map((item) => (
@@ -1119,15 +1331,373 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </>
           )}
 
-          {/* PRODUCT VIEW COM AJUSTE DINÂMICO DE GRAMAS E CALORIAS */}
+          {/* ESTADO 2: REVISÃO DE OCR DA TABELA NUTRICIONAL (Antes de salvar no banco) */}
+          {ocrReviewData && (
+            <div className="space-y-4 p-4 rounded-2xl bg-[#100C16] border border-[#8B5CF6]/60 animate-fadeIn">
+              <div className="flex items-center justify-between pb-3 border-b border-[#33263F]">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-[10px] text-[#A78BFA] font-bold uppercase tracking-wider">
+                      OCR ANVISA · IA Gemini
+                    </span>
+                    {ocrReviewData.barcode && (
+                      <span className="px-2 py-0.5 rounded-md bg-[#18121F] border border-[#33263F] text-[10px] text-[#B8AFC4] font-mono-numbers">
+                        Cód: {ocrReviewData.barcode}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-sm font-bold text-[#F8F5FC] mt-1">
+                    Conferir e Salvar Tabela Nutricional
+                  </h3>
+                  <p className="text-[11px] text-[#B8AFC4]">
+                    Os dados foram extraídos da foto. Você pode ajustar qualquer valor antes de salvar no banco.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOcrReviewData(null)}
+                  className="text-xs text-[#B8AFC4] hover:text-[#F8F5FC] px-2.5 py-1 rounded-lg bg-[#18121F] border border-[#33263F] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              {/* Identificação do produto */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-[#B8AFC4]">Nome do Produto *</label>
+                  <input
+                    type="text"
+                    value={ocrReviewData.productName || ''}
+                    onChange={(e) =>
+                      setOcrReviewData({ ...ocrReviewData, productName: e.target.value })
+                    }
+                    placeholder="Ex: Biscoito Integral Aveia e Mel"
+                    className="w-full px-3 py-2 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-[#B8AFC4]">Marca</label>
+                  <input
+                    type="text"
+                    value={ocrReviewData.brand || ''}
+                    onChange={(e) =>
+                      setOcrReviewData({ ...ocrReviewData, brand: e.target.value })
+                    }
+                    placeholder="Ex: Quaker, Danone, etc."
+                    className="w-full px-3 py-2 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
+                  />
+                </div>
+              </div>
+
+              {/* Porção e unidade */}
+              <div className="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-[#18121F] border border-[#33263F]">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-[#B8AFC4]">Peso da Porção (g ou ml)</label>
+                  <input
+                    type="number"
+                    value={ocrReviewData.portion?.servingQuantity || 100}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 100;
+                      setOcrReviewData({
+                        ...ocrReviewData,
+                        portion: { ...ocrReviewData.portion, servingQuantity: val },
+                      });
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC] font-mono-numbers"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-[#B8AFC4]">Descrição da Porção</label>
+                  <input
+                    type="text"
+                    value={ocrReviewData.portion?.servingSize || ''}
+                    onChange={(e) =>
+                      setOcrReviewData({
+                        ...ocrReviewData,
+                        portion: { ...ocrReviewData.portion, servingSize: e.target.value },
+                      })
+                    }
+                    placeholder="Ex: 30g (2 biscoitos)"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC]"
+                  />
+                </div>
+              </div>
+
+              {/* Tabela de valores por 100g */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#F8F5FC]">
+                    Valores Nutricionais por 100g / 100ml:
+                  </span>
+                  <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Confiança IA: {ocrReviewData.confidence?.overall || 90}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono-numbers">
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-pink-500/40 space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Calorias (kcal)</span>
+                    <input
+                      type="number"
+                      value={ocrReviewData.per100g?.calories ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            calories: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-bold text-[#EC4899] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-purple-500/40 space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Proteínas (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.protein ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            protein: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-bold text-[#8B5CF6] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-violet-500/40 space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Carboidratos (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.carbs ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            carbs: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-bold text-[#A78BFA] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-rose-500/40 space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Gorduras Totais (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.fat ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            fat: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-sm font-bold text-[#F472B6] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-[#33263F] space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Fibras (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.fiber ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            fiber: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-xs font-semibold text-[#F8F5FC] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-[#33263F] space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Sódio (mg)</span>
+                    <input
+                      type="number"
+                      value={ocrReviewData.per100g?.sodium ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            sodium: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-xs font-semibold text-[#F8F5FC] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-[#33263F] space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Açúcares Totais (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.sugars ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            sugars: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-xs font-semibold text-[#F8F5FC] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-[#18121F] border border-[#33263F] space-y-1">
+                    <span className="text-[10px] text-[#B8AFC4] block">Gorduras Sat. (g)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ocrReviewData.per100g?.saturatedFat ?? ''}
+                      onChange={(e) =>
+                        setOcrReviewData({
+                          ...ocrReviewData,
+                          per100g: {
+                            ...ocrReviewData.per100g,
+                            saturatedFat: parseFloat(e.target.value) || 0,
+                          },
+                        })
+                      }
+                      className="w-full bg-transparent text-xs font-semibold text-[#F8F5FC] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Proveniência */}
+              <div className="p-3 rounded-xl bg-[#18121F] border border-purple-500/20 text-[11px] text-[#B8AFC4] flex items-center justify-between">
+                <span>Origem dos dados: Código de barras + OCR Rótulo por IA Gemini</span>
+                <span className="text-emerald-400 font-semibold">Vínculo mantido</span>
+              </div>
+
+              {/* Botão de confirmação e salvamento definitivo no banco */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setOcrReviewData(null)}
+                  className="px-4 py-2.5 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmOcrAndSave}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>Confirmar & Salvar no Banco de Dados</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ESTADO 3: BUSCA COMPLEMENTAR POR NOME OU MARCA */}
+          {showNameSearch && !product && (
+            <div className="space-y-3.5 p-4 rounded-2xl bg-[#100C16] border border-[#33263F] animate-fadeIn">
+              <div className="flex items-center justify-between pb-2 border-b border-[#33263F]">
+                <div>
+                  <h3 className="text-xs font-bold text-[#F8F5FC]">
+                    Buscar Alimento por Nome ou Marca
+                  </h3>
+                  <p className="text-[10px] text-[#B8AFC4]">
+                    Priorizando produtos brasileiros (Open Food Facts e Banco Local)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNameSearch(false)}
+                  className="text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
+                >
+                  Voltar
+                </button>
+              </div>
+
+              <form onSubmit={handleSearchByName} className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchNameQuery}
+                  onChange={(e) => setSearchNameQuery(e.target.value)}
+                  placeholder="Ex: Pão de Forma Integral Wickbold"
+                  className="flex-1 px-3 py-2 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearchingName || !searchNameQuery.trim()}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  {isSearchingName ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  <span>Buscar</span>
+                </button>
+              </form>
+
+              {nameSearchResults.length > 0 && (
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {nameSearchResults.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectNameResult(item)}
+                      className="p-3 rounded-xl bg-[#18121F] hover:bg-[#22192C] border border-[#33263F] flex items-center justify-between gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#F8F5FC] truncate">
+                          {item.productName}
+                        </p>
+                        <p className="text-[10px] text-[#B8AFC4] truncate">
+                          {item.brand ? `${item.brand} · ` : ''}
+                          {item.barcode ? `Cód: ${item.barcode}` : 'Sem código'}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-bold text-[#EC4899] font-mono-numbers">
+                          {item.per100g.calories} kcal
+                        </span>
+                        <span className="text-[10px] text-[#A78BFA] block font-mono-numbers">
+                          por 100g
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ESTADO 4: PRODUTO ENCONTRADO — DETALHES COMPLETOS COM MODIFICADOR DE GRAMAS EM TEMPO REAL */}
           {product && (
             <div className="space-y-4 animate-fadeIn">
               <div className="p-4 rounded-2xl bg-[#100C16] border border-[#8B5CF6]/50 space-y-3.5">
                 {/* Cabeçalho do produto */}
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-[10px] text-[#A78BFA] uppercase tracking-wider font-semibold">
+                      <span className="px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-[10px] text-[#A78BFA] uppercase tracking-wider font-bold flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-400" />
                         {product.source}
                       </span>
                       {product.barcode && (
@@ -1136,7 +1706,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         </span>
                       )}
                     </div>
-                    <h3 className="text-base font-bold text-[#F8F5FC] mt-1.5">
+                    <h3 className="text-base font-bold text-[#F8F5FC] mt-1.5 truncate">
                       {product.productName}
                     </h3>
                     {product.brand && (
@@ -1145,7 +1715,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                   <button
                     onClick={() => setProduct(null)}
-                    className="text-xs text-[#B8AFC4] hover:text-[#F8F5FC] px-2 py-1 rounded-lg bg-[#18121F] border border-[#33263F] cursor-pointer"
+                    className="text-xs text-[#B8AFC4] hover:text-[#F8F5FC] px-2.5 py-1 rounded-lg bg-[#18121F] border border-[#33263F] cursor-pointer shrink-0"
                   >
                     Trocar
                   </button>
@@ -1156,10 +1726,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <label className="text-xs font-semibold text-[#F8F5FC] block">
-                        Quantidade que você vai consumir:
+                        Quantidade a consumir:
                       </label>
                       <span className="text-[11px] text-[#A78BFA]">
-                        Porção de referência do rótulo: {product.servingSize || `${product.servingGrams}g`}
+                        Porção de referência: {product.servingSize || `${product.servingGrams}g`}
                       </span>
                     </div>
 
@@ -1176,7 +1746,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Botões de ajuste rápido de gramas */}
+                  {/* Botões rápidos de gramas */}
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     <button
                       type="button"
@@ -1216,14 +1786,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* CALORIAS E MACROS RECALCULADOS EM TEMPO REAL */}
+                {/* MACROS RECALCULADOS EM TEMPO REAL */}
                 <div>
                   <div className="flex items-center justify-between pb-1.5">
                     <span className="text-[11px] text-[#B8AFC4] font-medium">
                       Valores recalculados para {consumedGrams}g:
                     </span>
                     <span className="text-[10px] text-[#B8AFC4]/80">
-                      Base: 100g = {product.per100g.calories} kcal
+                      Base 100g = {product.per100g.calories} kcal
                     </span>
                   </div>
 
@@ -1253,15 +1823,49 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       </span>
                     </div>
                   </div>
+
+                  {/* Detalhamento complementar ANVISA */}
+                  <div className="grid grid-cols-3 gap-2 font-mono-numbers text-center mt-2">
+                    <div className="p-2 rounded-lg bg-[#18121F] border border-[#33263F]">
+                      <span className="text-[9px] text-[#B8AFC4] block">Fibras</span>
+                      <span className="text-xs font-semibold text-[#F8F5FC]">
+                        {currentMacros.fiber}g
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#18121F] border border-[#33263F]">
+                      <span className="text-[9px] text-[#B8AFC4] block">Açúcares</span>
+                      <span className="text-xs font-semibold text-[#F8F5FC]">
+                        {currentMacros.sugars != null ? `${currentMacros.sugars}g` : '—'}
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-[#18121F] border border-[#33263F]">
+                      <span className="text-[9px] text-[#B8AFC4] block">Sódio</span>
+                      <span className="text-xs font-semibold text-[#F8F5FC]">
+                        {currentMacros.sodium != null ? `${currentMacros.sodium}mg` : '—'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Aviso amigável de salvamento persistente no banco */}
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-2">
-                  <Database className="w-4 h-4 shrink-0 text-emerald-400" />
-                  <span>
-                    Ao confirmar, este produto será <strong className="text-emerald-200">salvo no seu banco de dados</strong>.
-                    Nas próximas vezes, você poderá usá-lo sem precisar escanear de novo!
-                  </span>
+                {/* Aviso de persistência */}
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>
+                      {product.source === 'Banco Local'
+                        ? 'Produto carregado do seu banco de dados próprio.'
+                        : 'Será gravado no seu banco de dados para reutilização instantânea.'}
+                    </span>
+                  </div>
+                  {product.source !== 'Banco Local' && (
+                    <button
+                      type="button"
+                      onClick={handleSaveProductToDatabase}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] shrink-0 cursor-pointer transition-colors"
+                    >
+                      Salvar no Banco
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1281,14 +1885,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 >
                   <Check className="w-4 h-4" />
                   <span>
-                    Salvar na refeição ({currentMacros.calories} kcal)
+                    Adicionar à refeição ({currentMacros.calories} kcal)
                   </span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* FORMULÁRIO MANUAL */}
+          {/* ESTADO 5: CADASTRO MANUAL COMPLETO */}
           {isManualEntry && (
             <div className="space-y-3.5 p-4 rounded-2xl bg-[#100C16] border border-[#33263F] animate-fadeIn">
               <div className="flex items-center justify-between pb-2 border-b border-[#33263F]">
@@ -1414,6 +2018,53 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       })
                     }
                     className="w-full px-2 py-1.5 rounded-lg bg-[#18121F] border border-[#33263F] text-xs text-[#F472B6]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono-numbers">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#B8AFC4]">Fibras (g)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={manualForm.fiber}
+                    onChange={(e) =>
+                      setManualForm({
+                        ...manualForm,
+                        fiber: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full px-2 py-1.5 rounded-lg bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#B8AFC4]">Açúcares (g)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={manualForm.sugars}
+                    onChange={(e) =>
+                      setManualForm({
+                        ...manualForm,
+                        sugars: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full px-2 py-1.5 rounded-lg bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-[#B8AFC4]">Sódio (mg)</label>
+                  <input
+                    type="number"
+                    value={manualForm.sodium}
+                    onChange={(e) =>
+                      setManualForm({
+                        ...manualForm,
+                        sodium: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full px-2 py-1.5 rounded-lg bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC]"
                   />
                 </div>
               </div>

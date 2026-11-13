@@ -49,8 +49,13 @@ function nutritionSource(value: any) {
 function productDataSource(value: any) {
   const map: Record<string, string> = {
     'Open Food Facts': 'Open Food Facts',
+    'FatSecret': 'FatSecret',
     'Rótulo OCR': 'Rótulo',
     'Rótulo': 'Rótulo',
+    'IA Gemini': 'IA Gemini',
+    'IA': 'IA Gemini',
+    'Banco Local': 'Banco Local',
+    'TACO/TBCA': 'TACO/TBCA',
     Manual: 'Manual',
   };
   return map[value] || 'Manual';

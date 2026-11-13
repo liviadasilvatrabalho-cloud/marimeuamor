@@ -121,6 +121,35 @@ export async function initDatabase() {
   const schema = fs.readFileSync(schemaPath, 'utf-8');
   await pool.query(schema);
 
+  // Garante que a tabela products possui as colunas estendidas de nutrição e conformidade ANVISA
+  try {
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'products') THEN
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS sugars_per_100 NUMERIC(7,2);
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS added_sugars_per_100 NUMERIC(7,2);
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS saturated_fat_per_100 NUMERIC(7,2);
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS trans_fat_per_100 NUMERIC(7,2);
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS ingredients TEXT;
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS confidence_score NUMERIC(5,2);
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS provenance JSONB;
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition_source TEXT;
+
+          ALTER TABLE products DROP CONSTRAINT IF EXISTS products_data_source_check;
+          ALTER TABLE products ADD CONSTRAINT products_data_source_check
+            CHECK (data_source IN ('Open Food Facts', 'FatSecret', 'Manual', 'Rótulo', 'IA Gemini', 'TACO/TBCA', 'Banco Local'));
+
+          ALTER TABLE products DROP CONSTRAINT IF EXISTS products_verification_status_check;
+          ALTER TABLE products ADD CONSTRAINT products_verification_status_check
+            CHECK (verification_status IN ('pending', 'verified', 'rejected', 'user_confirmed'));
+        END IF;
+      END $$;
+    `);
+  } catch (err: any) {
+    console.warn('Aviso ao aplicar extensões na tabela products:', err?.message || err);
+  }
+
   const existing = await pool.query('SELECT 1 FROM app_state WHERE id = $1', [STATE_ID]);
   if (existing.rowCount === 0) {
     const seed = readSeedState();

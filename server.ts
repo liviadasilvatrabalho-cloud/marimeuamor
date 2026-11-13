@@ -505,10 +505,10 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
   }
 });
 
-// POST Gemini OCR Nutrition Facts Label
+// POST Gemini OCR Nutrition Facts Label (Conformidade ANVISA RDC 429/2020 e IN 75/2020)
 app.post('/api/gemini/ocr-label', async (req, res) => {
   try {
-    const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+    const { imageBase64, mimeType = 'image/jpeg', barcode, productNameHint, brandHint } = req.body;
 
     if (!imageBase64) {
       return res.status(400).json({ error: 'Imagem do rótulo não fornecida' });
@@ -523,25 +523,81 @@ app.post('/api/gemini/ocr-label', async (req, res) => {
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
 
     const promptText = `
-Você é um especialista em rotulagem de alimentos pela ANVISA (Brasil).
-Analise a fotografia do rótulo / tabela nutricional enviado por Mariana.
-Extraia com exatidão as informações presentes no rótulo. NUNCA invente dados. Se algum item não constar na tabela, retorne 0 ou string vazia.
+Você é uma inteligência artificial especialista em rotulagem e tabelas nutricionais segundo as normas da ANVISA (RDC nº 429/2020 e Instrução Normativa nº 75/2020 do Brasil).
+Analise com rigor técnico a fotografia da tabela nutricional / rótulo enviada por Mariana.
 
-Retorne estritamente em formato JSON:
+DIRETRIZES FUNDAMENTAIS DE CONFIABILIDADE E FIDELIDADE:
+1. TESTE DE LEGIBILIDADE:
+   - Se a imagem estiver cortada, muito embaçada, ilegível, sem iluminação adequada ou NÃO contiver uma tabela nutricional de alimentos, defina "isLegible": false.
+   - Em "illegibleReason", forneça uma explicação gentil e clara em português instruindo Mariana a tirar uma nova foto mais nítida, aproximada e com boa iluminação.
+2. NUNCA INVENTE DADOS:
+   - Extraia estritamente o que está impresso na embalagem.
+   - NUNCA transforme campos ausentes em zero! Se um nutriente (ex: açúcares adicionados, gorduras trans, sódio) NÃO constar na tabela ou rótulo, retorne null para esse campo.
+3. VALORES POR 100g / 100ml vs. VALORES POR PORÇÃO:
+   - No padrão brasileiro ANVISA, a tabela geralmente tem duas colunas: "100 g" (ou 100 ml) e "Porção (ex: 30g)".
+   - Extraia ambos os blocos ("per100" e "perPortion") com precisão.
+   - Se a embalagem contiver apenas a porção, informe os valores da porção e calcule matematicamente os valores por 100g/ml proporcionais.
+4. UNIDADE DA PORÇÃO:
+   - Identifique com exatidão se o alimento é sólido (unidade "g") ou líquido (unidade "ml").
+   - Identifique a medida caseira se informada (ex: "2 fatias", "1 xícara", "3 biscoitos").
+5. NÍVEL DE CONFIANÇA POR CAMPO:
+   - Atribua o nível de confiança ("alta", "media" ou "baixa") para cada nutriente identificado, baseado na clareza visual dos números na foto.
+   - Dê uma nota geral de confiança de 0 a 100 em "overallConfidence".
+6. CÓDIGO DE BARRAS E NOME:
+   - Se houver nome comercial ou marca visível no rótulo, extraia. Se fornecido pelo usuário (${productNameHint ? `Nome sugerido: "${productNameHint}"` : 'não fornecido'}), preserve-o como preferência.
+
+Responda ESTRITAMENTE em formato JSON com este schema:
 {
-  "productName": "Nome do produto",
-  "brand": "Marca do fabricante",
-  "servingSize": "ex: 30g (2 biscoitos) ou 200ml (1 copo)",
-  "servingGrams": 30,
-  "calories": 140,
-  "protein": 2.5,
-  "carbs": 21.0,
-  "fat": 5.2,
-  "saturatedFat": 2.1,
-  "fiber": 1.4,
-  "sodium": 85,
-  "ingredientsList": "Ingredientes: farinha de trigo enriquecida...",
-  "notes": "Informações relevantes ou alertas de alérgenos"
+  "isLegible": true,
+  "illegibleReason": null,
+  "productName": "${productNameHint || ''}",
+  "brand": "${brandHint || ''}",
+  "portion": {
+    "servingSize": "ex: 30g (2 biscoitos) ou 200ml (1 copo)",
+    "servingQuantity": 30,
+    "servingUnit": "g",
+    "servingsPerPackage": 5
+  },
+  "perPortion": {
+    "calories": 140,
+    "carbs": 21.0,
+    "sugars": 5.0,
+    "addedSugars": 3.0,
+    "protein": 2.5,
+    "totalFat": 5.2,
+    "saturatedFat": 2.1,
+    "transFat": 0.0,
+    "fiber": 1.4,
+    "sodium": 85
+  },
+  "per100": {
+    "unit": "100g",
+    "calories": 466,
+    "carbs": 70.0,
+    "sugars": 16.7,
+    "addedSugars": 10.0,
+    "protein": 8.3,
+    "totalFat": 17.3,
+    "saturatedFat": 7.0,
+    "transFat": 0.0,
+    "fiber": 4.7,
+    "sodium": 283
+  },
+  "confidence": {
+    "overall": 95,
+    "calories": "alta",
+    "carbs": "alta",
+    "protein": "alta",
+    "totalFat": "alta",
+    "saturatedFat": "alta",
+    "transFat": "alta",
+    "fiber": "alta",
+    "sodium": "alta",
+    "sugars": "alta",
+    "portion": "alta"
+  },
+  "ingredientsList": "Ingredientes: farinha de trigo, etc.",
+  "notes": "Informações adicionais ou alertas (ex: Contém Glúten)"
 }
 `;
 
@@ -558,10 +614,115 @@ Retorne estritamente em formato JSON:
         ],
       },
       responseMimeType: 'application/json',
+      temperature: 0.1,
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    return res.json(parsed);
+    const parsed = parseJsonLoose(response.text || '{}');
+
+    // Se a IA detectou que a foto é ilegível, retorna imediatamente com instruções
+    if (parsed.isLegible === false) {
+      return res.json({
+        isLegible: false,
+        barcode: barcode || null,
+        illegibleReason:
+          parsed.illegibleReason ||
+          'A fotografia ficou embaçada ou cortada e não foi possível ler os valores nutricionais com precisão. Por favor, aproxime a câmera da tabela nutricional sob boa luz e tire outra foto.',
+        confidence: { overall: 10 },
+      });
+    }
+
+    const servingQty = Number(parsed.portion?.servingQuantity) || 100;
+    const servingUnit = parsed.portion?.servingUnit === 'ml' ? 'ml' : 'g';
+    const servingRatio = servingQty > 0 ? 100 / servingQty : 1;
+
+    // Normalização matemática para garantir consistência entre porção e 100g/100ml
+    let per100 = parsed.per100 || {};
+    let perPortion = parsed.perPortion || {};
+
+    const resolveNutrient = (pVal: any, hVal: any) => {
+      const pNum = pVal != null && !isNaN(Number(pVal)) ? Number(pVal) : null;
+      const hNum = hVal != null && !isNaN(Number(hVal)) ? Number(hVal) : null;
+      if (hNum != null) {
+        return {
+          per100: Number(hNum.toFixed(1)),
+          perPortion: pNum != null ? Number(pNum.toFixed(1)) : Number(((hNum * servingQty) / 100).toFixed(1)),
+        };
+      }
+      if (pNum != null) {
+        return {
+          per100: Number((pNum * servingRatio).toFixed(1)),
+          perPortion: Number(pNum.toFixed(1)),
+        };
+      }
+      return { per100: null, perPortion: null };
+    };
+
+    const cCalories = resolveNutrient(perPortion.calories, per100.calories);
+    const cCarbs = resolveNutrient(perPortion.carbs, per100.carbs);
+    const cProtein = resolveNutrient(perPortion.protein, per100.protein);
+    const cFat = resolveNutrient(perPortion.totalFat, per100.totalFat);
+    const cSatFat = resolveNutrient(perPortion.saturatedFat, per100.saturatedFat);
+    const cTransFat = resolveNutrient(perPortion.transFat, per100.transFat);
+    const cFiber = resolveNutrient(perPortion.fiber, per100.fiber);
+    const cSodium = resolveNutrient(perPortion.sodium, per100.sodium);
+    const cSugars = resolveNutrient(perPortion.sugars, per100.sugars);
+    const cAddedSugars = resolveNutrient(perPortion.addedSugars, per100.addedSugars);
+
+    const result = {
+      isLegible: true,
+      barcode: barcode || null,
+      productName: parsed.productName || productNameHint || 'Produto identificado por foto',
+      brand: parsed.brand || brandHint || '',
+      portion: {
+        servingSize: parsed.portion?.servingSize || `${servingQty}${servingUnit}`,
+        servingQuantity: servingQty,
+        servingUnit,
+        servingsPerPackage: parsed.portion?.servingsPerPackage || null,
+      },
+      per100g: {
+        calories: cCalories.per100 != null ? Math.round(cCalories.per100) : 0,
+        carbs: cCarbs.per100,
+        sugars: cSugars.per100,
+        addedSugars: cAddedSugars.per100,
+        protein: cProtein.per100,
+        fat: cFat.per100,
+        saturatedFat: cSatFat.per100,
+        transFat: cTransFat.per100,
+        fiber: cFiber.per100,
+        sodium: cSodium.per100,
+      },
+      perPortion: {
+        calories: cCalories.perPortion != null ? Math.round(cCalories.perPortion) : 0,
+        carbs: cCarbs.perPortion,
+        sugars: cSugars.perPortion,
+        addedSugars: cAddedSugars.perPortion,
+        protein: cProtein.perPortion,
+        fat: cFat.perPortion,
+        saturatedFat: cSatFat.perPortion,
+        transFat: cTransFat.perPortion,
+        fiber: cFiber.perPortion,
+        sodium: cSodium.perPortion,
+      },
+      confidence: parsed.confidence || {
+        overall: 85,
+        calories: 'alta',
+        carbs: 'alta',
+        protein: 'alta',
+        fat: 'alta',
+      },
+      ingredientsList: parsed.ingredientsList || '',
+      notes: parsed.notes || '',
+      provenance: {
+        barcodeSource: barcode ? 'scanner' : 'manual',
+        nutritionSource: 'gemini_ocr',
+        nameSource: parsed.productName ? 'ocr' : (productNameHint ? 'user' : 'manual'),
+        confidenceScore: Number(parsed.confidence?.overall) || 85,
+        verifiedStatus: 'pending',
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    return res.json(result);
   } catch (err: any) {
     console.error('Erro no OCR de rótulo:', err);
     return res.status(500).json({
@@ -709,17 +870,258 @@ Responda em formato JSON:
   }
 });
 
-// GET Open Food Facts Barcode Lookup
-app.get('/api/barcode/:code', async (req, res) => {
-  const { code } = req.params;
-  if (!code || !/^\d{6,14}$/.test(code.trim())) {
-    return res.status(400).json({ error: 'Código de barras inválido' });
+// ---------------------------------------------------------------------------
+// Barcode Validation & Helper Routines
+// ---------------------------------------------------------------------------
+function isValidBarcodeFormat(code: string): boolean {
+  const clean = String(code || '').trim();
+  return /^\d{8}$|^\d{12,14}$/.test(clean);
+}
+
+function isValidEanChecksum(code: string): boolean {
+  const clean = String(code || '').trim();
+  if (!isValidBarcodeFormat(clean)) return false;
+  const digits = clean.split('').map(Number);
+  const checkDigit = digits.pop()!;
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    const weight = (digits.length - 1 - i) % 2 === 0 ? 3 : 1;
+    sum += digits[i] * weight;
+  }
+  const calculated = (10 - (sum % 10)) % 10;
+  return calculated === checkDigit;
+}
+
+// ---------------------------------------------------------------------------
+// FatSecret API Integration (Prioridade 3)
+// ---------------------------------------------------------------------------
+let fatSecretTokenCache: { token: string; expiresAt: number } | null = null;
+
+async function getFatSecretToken(): Promise<string | null> {
+  const clientId = process.env.FATSECRET_CLIENT_ID;
+  const clientSecret = process.env.FATSECRET_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  if (fatSecretTokenCache && Date.now() < fatSecretTokenCache.expiresAt) {
+    return fatSecretTokenCache.token;
   }
 
   try {
-    const cleanCode = code.trim();
+    const creds = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch('https://oauth.fatsecret.com/connect/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${creds}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials&scope=basic',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    if (data && data.access_token) {
+      fatSecretTokenCache = {
+        token: data.access_token,
+        expiresAt: Date.now() + (Number(data.expires_in || 86400) - 300) * 1000,
+      };
+      return data.access_token;
+    }
+  } catch (err) {
+    console.warn('[FatSecret] Autenticação OAuth2 falhou:', err);
+  }
+  return null;
+}
 
-    // 1) Banco local primeiro, restrito aos espaços do perfil autenticado.
+async function lookupFatSecret(barcode: string): Promise<any | null> {
+  const token = await getFatSecretToken();
+  if (!token) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+    const findUrl = `https://platform.fatsecret.com/rest/server.api?method=food.find_id_for_barcode&barcode=${encodeURIComponent(
+      barcode
+    )}&format=json`;
+    const res = await fetch(findUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const findData: any = await res.json();
+    const foodId = findData?.food_id?.value;
+    if (!foodId) return null;
+
+    const controller2 = new AbortController();
+    const timeout2 = setTimeout(() => controller2.abort(), 7000);
+    const getUrl = `https://platform.fatsecret.com/rest/server.api?method=food.get.v2&food_id=${encodeURIComponent(
+      foodId
+    )}&format=json`;
+    const getRes = await fetch(getUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller2.signal,
+    });
+    clearTimeout(timeout2);
+    if (!getRes.ok) return null;
+    const getData: any = await getRes.json();
+    const food = getData?.food;
+    if (!food) return null;
+
+    const servings = Array.isArray(food.servings?.serving)
+      ? food.servings.serving
+      : food.servings?.serving
+      ? [food.servings.serving]
+      : [];
+
+    const refServing =
+      servings.find((s: any) => s.metric_serving_unit === 'g' || s.metric_serving_amount) ||
+      servings[0] ||
+      {};
+
+    const servingGrams = Number(refServing.metric_serving_amount) || 100;
+    const ratio = servingGrams > 0 ? 100 / servingGrams : 1;
+
+    return {
+      found: true,
+      barcode,
+      productName: food.food_name || 'Alimento FatSecret',
+      brand: food.brand_name || '',
+      servingSize: refServing.serving_description || `${servingGrams}g`,
+      servingGrams,
+      per100g: {
+        calories: Math.round((Number(refServing.calories) || 0) * ratio),
+        protein: Number(((Number(refServing.protein) || 0) * ratio).toFixed(1)),
+        carbs: Number(((Number(refServing.carbohydrate) || 0) * ratio).toFixed(1)),
+        fat: Number(((Number(refServing.fat) || 0) * ratio).toFixed(1)),
+        fiber: Number(((Number(refServing.fiber) || 0) * ratio).toFixed(1)),
+        sodium: Number(((Number(refServing.sodium) || 0) * ratio).toFixed(1)),
+        sugars: refServing.sugar != null ? Number(((Number(refServing.sugar) || 0) * ratio).toFixed(1)) : null,
+        saturatedFat: refServing.saturated_fat != null ? Number(((Number(refServing.saturated_fat) || 0) * ratio).toFixed(1)) : null,
+        transFat: refServing.trans_fat != null ? Number(((Number(refServing.trans_fat) || 0) * ratio).toFixed(1)) : null,
+      },
+      imageUrl: food.food_images?.food_image?.[0]?.image_url || null,
+      source: 'FatSecret',
+      verificationStatus: 'verified',
+    };
+  } catch (err) {
+    console.warn('[FatSecret] Erro na consulta do código:', err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Open Food Facts API Integration (Prioridade 2)
+// ---------------------------------------------------------------------------
+async function lookupOpenFoodFacts(cleanCode: string): Promise<any | null> {
+  const urls = [
+    `https://world.openfoodfacts.org/api/v2/product/${cleanCode}.json`,
+    `https://br.openfoodfacts.org/api/v2/product/${cleanCode}.json`,
+    `https://world.openfoodfacts.org/api/v0/product/${cleanCode}.json`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const fetchRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'OurLittleKitchen/2.0 (mariana@ourlittlekitchen.app)',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (fetchRes.ok) {
+        const data: any = await fetchRes.json();
+        if (data && (data.status === 1 || data.product)) {
+          const productData = data.product;
+          // Validação obrigatória: o código retornado deve corresponder ao pesquisado
+          if (productData.code && String(productData.code).trim() !== cleanCode) {
+            console.warn(`[Open Food Facts] Código divergente ignorado: recebido ${productData.code}, esperado ${cleanCode}`);
+            continue;
+          }
+
+          const nutriments = productData.nutriments || {};
+
+          let servingGrams = 100;
+          const servingQuantity = productData.serving_quantity;
+          if (servingQuantity && !isNaN(Number(servingQuantity))) {
+            servingGrams = Number(servingQuantity);
+          }
+
+          const energyKcal =
+            nutriments['energy-kcal_100g'] ??
+            nutriments['energy-kcal'] ??
+            (nutriments['energy_100g'] ? Math.round(nutriments['energy_100g'] / 4.184) : 0);
+
+          // Sódio no OpenFoodFacts costuma vir em gramas (ex: 0.35g = 350mg). No Brasil rótulos usam mg.
+          let sodiumMg: number | null = null;
+          if (nutriments['sodium_100g'] != null) {
+            const rawSodium = Number(nutriments['sodium_100g']);
+            sodiumMg = rawSodium < 10 ? Math.round(rawSodium * 1000) : Math.round(rawSodium);
+          } else if (nutriments['salt_100g'] != null) {
+            // Sal ≈ Sódio × 2.54 => Sódio ≈ Sal / 2.54
+            const rawSalt = Number(nutriments['salt_100g']);
+            sodiumMg = rawSalt < 10 ? Math.round((rawSalt / 2.54) * 1000) : Math.round(rawSalt / 2.54);
+          }
+
+          return {
+            found: true,
+            barcode: cleanCode,
+            productName:
+              productData.product_name_pt ||
+              productData.product_name ||
+              productData.generic_name_pt ||
+              productData.generic_name ||
+              'Produto sem nome',
+            brand: productData.brands || productData.brand_owner || '',
+            category: productData.categories || '',
+            packageSize: productData.quantity || '',
+            servingSize: productData.serving_size || `${servingGrams}g`,
+            servingGrams,
+            per100g: {
+              calories: Math.round(Number(energyKcal) || 0),
+              protein: Number(Number(nutriments['proteins_100g'] ?? 0).toFixed(1)),
+              carbs: Number(Number(nutriments['carbohydrates_100g'] ?? 0).toFixed(1)),
+              fat: Number(Number(nutriments['fat_100g'] ?? 0).toFixed(1)),
+              saturatedFat: nutriments['saturated-fat_100g'] != null ? Number(Number(nutriments['saturated-fat_100g']).toFixed(1)) : null,
+              transFat: nutriments['trans-fat_100g'] != null ? Number(Number(nutriments['trans-fat_100g']).toFixed(1)) : null,
+              fiber: Number(Number(nutriments['fiber_100g'] ?? 0).toFixed(1)),
+              sugars: nutriments['sugars_100g'] != null ? Number(Number(nutriments['sugars_100g']).toFixed(1)) : null,
+              addedSugars: nutriments['added-sugars_100g'] != null ? Number(Number(nutriments['added-sugars_100g']).toFixed(1)) : null,
+              sodium: sodiumMg,
+            },
+            imageUrl: productData.image_url || productData.image_front_url || null,
+            ingredients: productData.ingredients_text_pt || productData.ingredients_text || null,
+            source: 'Open Food Facts',
+            verificationStatus: 'verified',
+            lastUpdated: productData.last_modified_t ? new Date(productData.last_modified_t * 1000).toISOString() : new Date().toISOString(),
+          };
+        }
+      }
+    } catch (e) {
+      // Segue para a próxima url ou fallback
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// GET Barcode Lookup (Prioridade 1: Banco, Prioridade 2: OFF, Prioridade 3: FatSecret, Prioridade 4: Fallback)
+// ---------------------------------------------------------------------------
+app.get('/api/barcode/:code', async (req, res) => {
+  const { code } = req.params;
+  const cleanCode = String(code || '').trim();
+
+  if (!cleanCode || cleanCode.length < 6) {
+    return res.status(400).json({ error: 'Código de barras inválido.' });
+  }
+
+  try {
+    // 1) PRIORIDADE 1 — BANCO DE DADOS PRÓPRIO
     const profileId = await resolveStorageProfile(req);
     if (pool) {
       let local: any = null;
@@ -734,7 +1136,7 @@ app.get('/api/barcode/:code', async (req, res) => {
           [cleanCode, profileId]
         );
       }
-      // Fallback sem restriction caso esteja rodando em modo simplificado/usuário único
+      // Fallback sem restrição de espaço (modo usuário único / catálogo compartilhado)
       if (!local || local.rows.length === 0) {
         local = await pool.query(
           `SELECT p.* FROM products p
@@ -744,6 +1146,7 @@ app.get('/api/barcode/:code', async (req, res) => {
           [cleanCode]
         );
       }
+
       if (local && local.rows.length) {
         const p = local.rows[0];
         const servingGrams = Number(p.serving_quantity) || 100;
@@ -753,6 +1156,8 @@ app.get('/api/barcode/:code', async (req, res) => {
           barcode: p.barcode,
           productName: p.commercial_name,
           brand: p.brand || '',
+          category: p.category || '',
+          packageSize: p.package_size || '',
           servingSize: p.serving_unit || `${servingGrams}g`,
           servingGrams,
           per100g: {
@@ -760,89 +1165,365 @@ app.get('/api/barcode/:code', async (req, res) => {
             protein: Number(p.protein_per_100) || 0,
             carbs: Number(p.carbs_per_100) || 0,
             fat: Number(p.fat_per_100) || 0,
+            saturatedFat: p.saturated_fat_per_100 != null ? Number(p.saturated_fat_per_100) : null,
+            transFat: p.trans_fat_per_100 != null ? Number(p.trans_fat_per_100) : null,
             fiber: Number(p.fiber_per_100) || 0,
-            sodium: Number(p.sodium_per_100) || 0,
+            sugars: p.sugars_per_100 != null ? Number(p.sugars_per_100) : null,
+            addedSugars: p.added_sugars_per_100 != null ? Number(p.added_sugars_per_100) : null,
+            sodium: p.sodium_per_100 != null ? Number(p.sodium_per_100) : null,
           },
           imageUrl: p.image_path || null,
+          ingredients: p.ingredients || null,
           source: p.data_source || 'Banco Local',
+          verificationStatus: p.verification_status || 'verified',
+          confidenceScore: p.confidence_score ? Number(p.confidence_score) : 100,
+          provenance: p.provenance || {
+            barcodeSource: 'scanner',
+            nutritionSource: p.data_source || 'Banco Local',
+            verifiedStatus: p.verification_status || 'verified',
+          },
+          lastUpdated: p.last_updated_at || p.updated_at || new Date().toISOString(),
           product: p,
         });
       }
     }
 
-    // 2) Open Food Facts (Brasil e mundial)
-    const urls = [
-      `https://world.openfoodfacts.org/api/v2/product/${cleanCode}.json`,
-      `https://br.openfoodfacts.org/api/v0/product/${cleanCode}.json`,
-    ];
+    // 2) PRIORIDADE 2 — OPEN FOOD FACTS
+    const offProduct = await lookupOpenFoodFacts(cleanCode);
+    if (offProduct) {
+      return res.json(offProduct);
+    }
 
-    let productData: any = null;
-
-    for (const url of urls) {
-      try {
-        const fetchRes = await fetch(url, {
-          headers: {
-            'User-Agent': 'OurLittleKitchenApp/1.0 (mariana@ourlittlekitchen.app)',
-          },
-        });
-        if (fetchRes.ok) {
-          const data: any = await fetchRes.json();
-          if (data && (data.status === 1 || data.product)) {
-            productData = data.product;
-            break;
-          }
-        }
-      } catch (e) {
-        // Continue to fallback
+    // 3) PRIORIDADE 3 — FATSECRET (quando credenciais estiverem configuradas)
+    if (process.env.FATSECRET_CLIENT_ID && process.env.FATSECRET_CLIENT_SECRET) {
+      const fatSecretProduct = await lookupFatSecret(cleanCode);
+      if (fatSecretProduct) {
+        return res.json(fatSecretProduct);
       }
     }
 
-    if (!productData) {
-      return res.status(404).json({
-        found: false,
-        barcode: cleanCode,
-        message: 'Produto não encontrado na base Open Food Facts.',
-      });
-    }
-
-    const nutriments = productData.nutriments || {};
-
-    // Extract serving info
-    let servingGrams = 100;
-    const servingQuantity = productData.serving_quantity;
-    if (servingQuantity && !isNaN(Number(servingQuantity))) {
-      servingGrams = Number(servingQuantity);
-    }
-
-    const energyKcal =
-      nutriments['energy-kcal_100g'] ??
-      nutriments['energy-kcal'] ??
-      (nutriments['energy_100g'] ? Math.round(nutriments['energy_100g'] / 4.184) : 0);
-
-    const result = {
-      found: true,
+    // 4) PRIORIDADE 4 — FALLBACK INTELIGENTE (nunca fecha com erro simples)
+    return res.status(404).json({
+      found: false,
       barcode: cleanCode,
-      productName: productData.product_name_pt || productData.product_name || 'Produto sem nome',
-      brand: productData.brands || productData.brand_owner || '',
-      servingSize: productData.serving_size || `${servingGrams}g`,
-      servingGrams: servingGrams,
-      // Values per 100g
-      per100g: {
-        calories: Math.round(Number(energyKcal) || 0),
-        protein: Number(Number(nutriments['proteins_100g'] ?? 0).toFixed(1)),
-        carbs: Number(Number(nutriments['carbohydrates_100g'] ?? 0).toFixed(1)),
-        fat: Number(Number(nutriments['fat_100g'] ?? 0).toFixed(1)),
-        fiber: Number(Number(nutriments['fiber_100g'] ?? 0).toFixed(1)),
-        sodium: Number(Number(nutriments['sodium_100g'] ?? 0).toFixed(1)),
+      message: `O produto com código ${cleanCode} não foi localizado automaticamente nas bases cadastradas.`,
+      recoveryOptions: {
+        allowPhotoNutritionTable: true,
+        allowSearchByName: true,
+        allowManualEntry: true,
       },
-      imageUrl: productData.image_url || productData.image_front_url || null,
-      source: 'Open Food Facts',
+    });
+  } catch (err: any) {
+    console.error('Erro na consulta em cascata de código de barras:', err);
+    return res.status(500).json({
+      error: 'Falha temporária ao consultar bases de alimentos: ' + (err.message || 'Erro interno'),
+      recoveryOptions: {
+        allowPhotoNutritionTable: true,
+        allowSearchByName: true,
+        allowManualEntry: true,
+      },
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET Busca Complementar por Nome e Marca (Prioridade 4)
+// ---------------------------------------------------------------------------
+app.get('/api/barcode/search-by-name', async (req, res) => {
+  const { q, brand } = req.query as { q?: string; brand?: string };
+  const queryText = String(q || '').trim();
+
+  if (!queryText) {
+    return res.status(400).json({ error: 'Termo de busca não fornecido' });
+  }
+
+  const results: any[] = [];
+  const seenIds = new Set<string>();
+
+  // 1. Busca no Banco Local (Postgres)
+  if (pool) {
+    try {
+      let sql = `SELECT * FROM products WHERE deleted_at IS NULL AND (commercial_name ILIKE $1`;
+      const params: any[] = [`%${queryText}%`];
+      if (brand && brand.trim()) {
+        sql += ` OR brand ILIKE $2`;
+        params.push(`%${brand.trim()}%`);
+      }
+      sql += `) ORDER BY commercial_name LIMIT 10`;
+
+      const { rows } = await pool.query(sql, params);
+      for (const p of rows) {
+        seenIds.add(p.barcode);
+        results.push({
+          barcode: p.barcode,
+          productName: p.commercial_name,
+          brand: p.brand || '',
+          servingSize: p.serving_unit || `${p.serving_quantity || 100}g`,
+          servingGrams: Number(p.serving_quantity) || 100,
+          per100g: {
+            calories: Number(p.calories_per_100) || 0,
+            protein: Number(p.protein_per_100) || 0,
+            carbs: Number(p.carbs_per_100) || 0,
+            fat: Number(p.fat_per_100) || 0,
+            fiber: Number(p.fiber_per_100) || 0,
+            sodium: p.sodium_per_100 != null ? Number(p.sodium_per_100) : null,
+          },
+          imageUrl: p.image_path || null,
+          source: 'Banco Local',
+          verificationStatus: p.verification_status || 'verified',
+        });
+      }
+    } catch (e) {
+      console.warn('Busca local por nome falhou:', e);
+    }
+  }
+
+  // 2. Busca na API Open Food Facts (filtrada e ordenada)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const searchUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
+      queryText
+    )}&search_simple=1&action=process&json=1&page_size=10`;
+
+    const searchRes = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'OurLittleKitchen/2.0 (mariana@ourlittlekitchen.app)' },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (searchRes.ok) {
+      const data: any = await searchRes.json();
+      const products = Array.isArray(data?.products) ? data.products : [];
+
+      for (const p of products) {
+        if (!p.code || seenIds.has(p.code)) continue;
+        seenIds.add(p.code);
+
+        const n = p.nutriments || {};
+        const servingGrams = Number(p.serving_quantity) || 100;
+        const energyKcal =
+          n['energy-kcal_100g'] ??
+          n['energy-kcal'] ??
+          (n['energy_100g'] ? Math.round(n['energy_100g'] / 4.184) : 0);
+
+        results.push({
+          barcode: p.code,
+          productName: p.product_name_pt || p.product_name || 'Produto sem nome',
+          brand: p.brands || p.brand_owner || '',
+          servingSize: p.serving_size || `${servingGrams}g`,
+          servingGrams,
+          per100g: {
+            calories: Math.round(Number(energyKcal) || 0),
+            protein: Number(Number(n.proteins_100g ?? 0).toFixed(1)),
+            carbs: Number(Number(n.carbohydrates_100g ?? 0).toFixed(1)),
+            fat: Number(Number(n.fat_100g ?? 0).toFixed(1)),
+            fiber: Number(Number(n.fiber_100g ?? 0).toFixed(1)),
+            sodium: n.sodium_100g != null ? Math.round(Number(n.sodium_100g) < 10 ? Number(n.sodium_100g) * 1000 : Number(n.sodium_100g)) : null,
+          },
+          imageUrl: p.image_url || p.image_front_url || null,
+          source: 'Open Food Facts',
+          verificationStatus: 'verified',
+        });
+      }
+    }
+  } catch (e) {
+    // Ignorado se OFF estiver fora do ar
+  }
+
+  return res.json({
+    found: results.length > 0,
+    count: results.length,
+    items: results,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST Salvar / Cadastrar Produto com Tabela Nutricional (Deduplicação & Auditoria)
+// ---------------------------------------------------------------------------
+app.post('/api/barcode/save-product', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const barcode = String(b.barcode || '').trim();
+    const commercialName = String(b.productName || b.commercial_name || '').trim();
+
+    if (!barcode || !commercialName) {
+      return res.status(400).json({ error: 'Código de barras e nome do produto são obrigatórios.' });
+    }
+
+    const brand = b.brand ? String(b.brand).trim() : null;
+    const servingQuantity = Number(b.servingGrams || b.serving_quantity) || 100;
+    const servingUnit = String(b.servingSize || b.serving_unit || `${servingQuantity}g`);
+
+    const p100 = b.per100g || {};
+    const caloriesPer100 = Number(p100.calories) || 0;
+    const proteinPer100 = Number(p100.protein) || 0;
+    const carbsPer100 = Number(p100.carbs) || 0;
+    const fatPer100 = Number(p100.fat) || 0;
+    const saturatedFatPer100 = p100.saturatedFat != null ? Number(p100.saturatedFat) : null;
+    const transFatPer100 = p100.transFat != null ? Number(p100.transFat) : null;
+    const fiberPer100 = Number(p100.fiber) || 0;
+    const sugarsPer100 = p100.sugars != null ? Number(p100.sugars) : null;
+    const addedSugarsPer100 = p100.addedSugars != null ? Number(p100.addedSugars) : null;
+    const sodiumPer100 = p100.sodium != null ? Number(p100.sodium) : null;
+
+    const caloriesPerServing = Math.round((caloriesPer100 * servingQuantity) / 100);
+    const dataSource = b.source || 'Banco Local';
+    const verificationStatus = b.verificationStatus || 'user_confirmed';
+    const confidenceScore = Number(b.confidenceScore) || 95;
+    const ingredients = b.ingredients || b.ingredientsList || null;
+    const imagePath = b.imageUrl || b.image_path || null;
+
+    const provenance = b.provenance || {
+      barcodeSource: 'scanner',
+      nutritionSource: dataSource,
+      nameSource: 'user',
+      confidenceScore,
+      verifiedStatus: verificationStatus,
+      savedAt: new Date().toISOString(),
     };
 
-    return res.json(result);
+    let savedProduct: any = null;
+
+    // Se o banco estiver configurado, salva no Postgres com UPSERT
+    if (pool) {
+      const profileId = await resolveStorageProfile(req);
+      let spaceId: string | null = null;
+      if (profileId) {
+        const spaceRes = await pool.query(
+          `SELECT kitchen_space_id FROM memberships WHERE profile_id = $1 ORDER BY joined_at LIMIT 1`,
+          [profileId]
+        );
+        spaceId = spaceRes.rows[0]?.kitchen_space_id || null;
+      }
+      if (!spaceId) {
+        const anySpace = await pool.query(`SELECT id FROM kitchen_spaces LIMIT 1`);
+        spaceId = anySpace.rows[0]?.id || '11111111-1111-1111-1111-111111111111';
+      }
+
+      // Upsert na tabela products garantindo reuso do código de barras
+      const upsertSql = `
+        INSERT INTO products (
+          kitchen_space_id, created_by, barcode, commercial_name, brand,
+          serving_quantity, serving_unit, calories_per_serving, calories_per_100,
+          protein_per_100, carbs_per_100, fat_per_100, fiber_per_100, sodium_per_100,
+          sugars_per_100, added_sugars_per_100, saturated_fat_per_100, trans_fat_per_100,
+          image_path, ingredients, data_source, provenance, confidence_score,
+          verification_status, updated_at, last_updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+          $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now(), now()
+        )
+        ON CONFLICT (barcode) DO UPDATE SET
+          commercial_name = EXCLUDED.commercial_name,
+          brand = COALESCE(EXCLUDED.brand, products.brand),
+          serving_quantity = EXCLUDED.serving_quantity,
+          serving_unit = EXCLUDED.serving_unit,
+          calories_per_serving = EXCLUDED.calories_per_serving,
+          calories_per_100 = EXCLUDED.calories_per_100,
+          protein_per_100 = EXCLUDED.protein_per_100,
+          carbs_per_100 = EXCLUDED.carbs_per_100,
+          fat_per_100 = EXCLUDED.fat_per_100,
+          fiber_per_100 = EXCLUDED.fiber_per_100,
+          sodium_per_100 = EXCLUDED.sodium_per_100,
+          sugars_per_100 = EXCLUDED.sugars_per_100,
+          added_sugars_per_100 = EXCLUDED.added_sugars_per_100,
+          saturated_fat_per_100 = EXCLUDED.saturated_fat_per_100,
+          trans_fat_per_100 = EXCLUDED.trans_fat_per_100,
+          image_path = COALESCE(EXCLUDED.image_path, products.image_path),
+          ingredients = COALESCE(EXCLUDED.ingredients, products.ingredients),
+          data_source = EXCLUDED.data_source,
+          provenance = EXCLUDED.provenance,
+          confidence_score = EXCLUDED.confidence_score,
+          verification_status = EXCLUDED.verification_status,
+          deleted_at = NULL,
+          last_updated_at = now(),
+          updated_at = now()
+        RETURNING *;
+      `;
+
+      const { rows } = await pool.query(upsertSql, [
+        spaceId,
+        profileId || null,
+        barcode,
+        commercialName,
+        brand,
+        servingQuantity,
+        servingUnit,
+        caloriesPerServing,
+        caloriesPer100,
+        proteinPer100,
+        carbsPer100,
+        fatPer100,
+        fiberPer100,
+        sodiumPer100,
+        sugarsPer100,
+        addedSugarsPer100,
+        saturatedFatPer100,
+        transFatPer100,
+        imagePath,
+        ingredients,
+        dataSource,
+        JSON.stringify(provenance),
+        confidenceScore,
+        verificationStatus,
+      ]);
+
+      savedProduct = rows[0];
+
+      // Registra no histórico de auditoria nutricional (audit trail)
+      try {
+        await pool.query(
+          `INSERT INTO product_nutrition_history (
+             product_id, changed_by, previous_values, new_values, change_reason, data_source
+           ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            savedProduct.id,
+            profileId || null,
+            JSON.stringify({}),
+            JSON.stringify(p100),
+            'Cadastro / Atualização via Leitor Inteligente de Código de Barras',
+            dataSource,
+          ]
+        );
+      } catch (auditErr) {
+        // Auditoria silenciosa
+      }
+    }
+
+    // Retorna payload completo padronizado para o frontend
+    return res.status(201).json({
+      success: true,
+      product: {
+        barcode,
+        productName: commercialName,
+        brand: brand || '',
+        servingSize: servingUnit,
+        servingGrams: servingQuantity,
+        per100g: {
+          calories: caloriesPer100,
+          protein: proteinPer100,
+          carbs: carbsPer100,
+          fat: fatPer100,
+          saturatedFat: saturatedFatPer100,
+          transFat: transFatPer100,
+          fiber: fiberPer100,
+          sugars: sugarsPer100,
+          addedSugars: addedSugarsPer100,
+          sodium: sodiumPer100,
+        },
+        imageUrl: imagePath,
+        ingredients,
+        source: 'Banco Local',
+        verificationStatus,
+        confidenceScore,
+        provenance,
+        lastUpdated: new Date().toISOString(),
+      },
+    });
   } catch (err: any) {
-    console.error('Erro ao consultar código de barras:', err);
-    return res.status(500).json({ error: 'Falha ao consultar base Open Food Facts' });
+    console.error('Erro ao salvar produto:', err);
+    return res.status(500).json({ error: 'Erro ao salvar produto no banco: ' + (err.message || 'Erro interno') });
   }
 });
 

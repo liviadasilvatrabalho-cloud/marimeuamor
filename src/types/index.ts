@@ -21,9 +21,12 @@ export type NutritionSource =
   | 'TBCA'
   | 'USDA'
   | 'Open Food Facts'
+  | 'FatSecret'
   | 'Rótulo OCR'
   | 'IA'
-  | 'Manual';
+  | 'IA Gemini'
+  | 'Manual'
+  | 'Banco Local';
 
 export interface FoodItem {
   id: string;
@@ -37,6 +40,10 @@ export interface FoodItem {
     fat?: number;
     fiber?: number;
     sodium?: number;
+    sugars?: number;
+    addedSugars?: number;
+    saturatedFat?: number;
+    transFat?: number;
   };
   prepState: PrepState;
   portionGrams: number;
@@ -45,9 +52,23 @@ export interface FoodItem {
   carbs: number;
   fat: number;
   fiber: number;
+  sugars?: number;
+  addedSugars?: number;
+  saturatedFat?: number;
+  transFat?: number;
+  sodium?: number;
   source: NutritionSource;
   householdMeasure?: string;
   verified?: boolean;
+  confidenceScore?: number;
+  provenance?: {
+    barcodeSource?: string;
+    nutritionSource?: string;
+    nameSource?: string;
+    confidenceScore?: number;
+    verifiedStatus?: string;
+    updatedAt?: string;
+  };
 }
 
 export interface MealLog {
