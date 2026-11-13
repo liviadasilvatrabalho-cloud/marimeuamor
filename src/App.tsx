@@ -4,7 +4,7 @@ import { StorageService, INITIAL_USER_PROFILE } from './services/storage';
 import { Header, MobileTabBar, MobileMenuDrawer, TabId } from './components/Navigation';
 import { MeuDia } from './components/MeuDia';
 import { FoodScannerModal } from './components/FoodScannerModal';
-import { BarcodeScannerModal } from './components/BarcodeScannerModal';
+import { NutritionLabelModal } from './components/NutritionLabelModal';
 import { SemBalanca } from './components/SemBalanca';
 import { CalculadoraNutricional } from './components/CalculadoraNutricional';
 import { PlanejamentoSemanal } from './components/PlanejamentoSemanal';
@@ -369,7 +369,7 @@ export default function App() {
 
         {activeTab === 'barcode' && (
           <div className="py-2">
-            <BarcodeScannerModal
+            <NutritionLabelModal
               isOpen={true}
               onClose={() => setActiveTab('meu-dia')}
               initialMealType={selectedMealTypeForAction}
@@ -479,8 +479,8 @@ export default function App() {
         onSaveMeal={handleSaveMealFromScanner}
       />
 
-      {/* Barcode Scanner Modal */}
-      <BarcodeScannerModal
+      {/* Modal de Cadastro por Foto da Tabela Nutricional */}
+      <NutritionLabelModal
         isOpen={isBarcodeScannerOpen}
         onClose={() => setIsBarcodeScannerOpen(false)}
         initialMealType={selectedMealTypeForAction}

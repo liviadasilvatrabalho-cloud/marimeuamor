@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Camera,
-  Barcode,
+  FileText,
   Scale,
   Plus,
   Clock,
@@ -147,8 +147,8 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
               onClick={() => onOpenBarcodeScanner()}
               className="flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2.5 sm:py-3 rounded-2xl bg-[#100C16] hover:bg-[#22192C] text-[#F8F5FC] border border-[#33263F] hover:border-[#8B5CF6]/50 text-[11px] sm:text-xs font-medium transition-all active:scale-[0.98] cursor-pointer"
             >
-              <Barcode className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#A78BFA] shrink-0" />
-              <span className="truncate">Código Barras</span>
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#A78BFA] shrink-0" />
+              <span className="truncate">Foto Tabela</span>
             </button>
 
             <button

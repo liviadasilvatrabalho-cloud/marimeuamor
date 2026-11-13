@@ -9,6 +9,7 @@ import {
   getDatabaseStatus,
   closeDatabase,
   pool,
+  STATE_ID,
 } from './db';
 import apiRouter from './src/api';
 import { syncAppStateToDatabase } from './src/normalize';
@@ -1438,17 +1439,21 @@ app.get('/api/barcode/search-by-name', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST Salvar / Cadastrar Produto com Tabela Nutricional (Deduplicação & Auditoria)
+// POST Salvar / Cadastrar Alimento com Tabela Nutricional por Foto (Postgres & app_state)
 // ---------------------------------------------------------------------------
-app.post('/api/barcode/save-product', async (req, res) => {
+const handleSaveProductOrFood = async (req: express.Request, res: express.Response) => {
   try {
     const b = req.body || {};
-    const barcode = String(b.barcode || '').trim();
-    const commercialName = String(b.productName || b.commercial_name || '').trim();
+    const commercialName = String(b.productName || b.commercial_name || b.name || '').trim();
 
-    if (!barcode || !commercialName) {
-      return res.status(400).json({ error: 'Código de barras e nome do produto são obrigatórios.' });
+    if (!commercialName) {
+      return res.status(400).json({ error: 'Nome do alimento é obrigatório para o cadastro.' });
     }
+
+    // Se não tiver código de barras (fluxo padrão por fotografia de tabela), gera ID interno
+    const barcode = b.barcode && String(b.barcode).trim() !== ''
+      ? String(b.barcode).trim()
+      : `FOTO-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     const brand = b.brand ? String(b.brand).trim() : null;
     const servingQuantity = Number(b.servingGrams || b.serving_quantity) || 100;
@@ -1675,7 +1680,10 @@ app.post('/api/barcode/save-product', async (req, res) => {
     console.error('Erro ao salvar produto:', err);
     return res.status(500).json({ error: 'Erro ao salvar produto no banco: ' + (err.message || 'Erro interno') });
   }
-});
+};
+
+app.post('/api/barcode/save-product', handleSaveProductOrFood);
+app.post('/api/nutrition/save-food', handleSaveProductOrFood);
 
 // POST Gemini Read Barcode from Photo
 app.post('/api/gemini/read-barcode', async (req, res) => {

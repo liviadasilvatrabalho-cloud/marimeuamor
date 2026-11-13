@@ -8,7 +8,6 @@ import {
   Utensils,
   Tag,
   Database,
-  Barcode,
 } from 'lucide-react';
 import { TACO_TBCA_DATABASE, DatabaseFood, calculateNutritionalValues } from '../data/nutritionDatabase';
 import { FoodItem, MealType, MealSlot } from '../types';
@@ -273,14 +272,14 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
           <div className="space-y-2.5 sm:space-y-3">
             <div className="space-y-1">
               <label className="text-[11px] sm:text-xs font-medium text-[#B8AFC4] block">
-                Pesquisar alimento ou código de barras:
+                Pesquisar alimento salvo ou tabela TACO:
               </label>
               <div className="relative">
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Pesquisar (ex: frango, arroz, código de barras...)"
+                  placeholder="Pesquisar (ex: frango, arroz, aveia, iogurte...)"
                   className="w-full pl-8 pr-3 py-2 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
                 />
                 <Search className="w-3.5 h-3.5 text-[#B8AFC4] absolute left-2.5 top-2.5" />
@@ -319,8 +318,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
                             {f.name}
                           </span>
                           <span className="text-[10px] text-[#B8AFC4] truncate block">
-                            {f.brand ? `${f.brand} · ` : ''}
-                            {f.barcode ? `Cód: ${f.barcode}` : 'Salvo'}
+                            {f.brand ? `${f.brand} · ` : ''}Alimento Salvo
                           </span>
                         </div>
                         <span className="text-[10px] font-mono-numbers shrink-0 text-emerald-400 font-bold">

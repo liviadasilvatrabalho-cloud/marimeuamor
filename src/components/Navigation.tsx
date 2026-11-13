@@ -7,7 +7,7 @@ import {
   CalendarDays,
   History,
   User,
-  Barcode,
+  FileText,
   Sparkles,
   Menu,
   X,
@@ -100,8 +100,8 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
                 : 'text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#18121F]/60'
             }`}
           >
-            <Barcode className="w-3.5 h-3.5 text-[#A78BFA]" />
-            Código de Barras
+            <FileText className="w-3.5 h-3.5 text-[#A78BFA]" />
+            Foto da Tabela
           </button>
           <button
             onClick={() => onSelectTab('sem-balanca')}
@@ -289,9 +289,9 @@ export const MobileMenuDrawer: React.FC<{
     },
     {
       id: 'barcode',
-      label: 'Código de Barras',
-      description: 'Escanear embalagens e tabela nutricional',
-      icon: <Barcode className="w-4 h-4 text-[#A78BFA]" />,
+      label: 'Foto da Tabela',
+      description: 'Fotografar tabela nutricional com IA (ANVISA)',
+      icon: <FileText className="w-4 h-4 text-[#A78BFA]" />,
       color: 'border-[#8B5CF6]/40',
     },
     {

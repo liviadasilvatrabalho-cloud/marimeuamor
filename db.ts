@@ -26,7 +26,7 @@ function normalizeConnectionString(url: string | undefined) {
 
 const CONNECTION_STRING = normalizeConnectionString(RAW_CONNECTION_STRING);
 const USE_SSL = /sslmode=(require|verify)/.test(RAW_CONNECTION_STRING || '');
-const STATE_ID = 'mariana-kitchen';
+export const STATE_ID = 'mariana-kitchen';
 
 /**
  * Postgres pool.
@@ -137,6 +137,10 @@ export async function initDatabase() {
           ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition_source TEXT;
           ALTER TABLE products ADD COLUMN IF NOT EXISTS household_measure TEXT;
           ALTER TABLE products ADD COLUMN IF NOT EXISTS per_portion JSONB;
+
+          -- Permite produtos cadastrados exclusivamente por foto de tabela nutricional (sem código de barras)
+          ALTER TABLE products ALTER COLUMN barcode DROP NOT NULL;
+          ALTER TABLE products DROP CONSTRAINT IF EXISTS products_barcode_key;
 
           ALTER TABLE products DROP CONSTRAINT IF EXISTS products_data_source_check;
           ALTER TABLE products ADD CONSTRAINT products_data_source_check

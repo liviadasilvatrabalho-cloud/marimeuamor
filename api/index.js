@@ -26,7 +26,7 @@ function normalizeConnectionString(url) {
 }
 var CONNECTION_STRING = normalizeConnectionString(RAW_CONNECTION_STRING);
 var USE_SSL = /sslmode=(require|verify)/.test(RAW_CONNECTION_STRING || "");
-var STATE_ID2 = "mariana-kitchen";
+var STATE_ID = "mariana-kitchen";
 var pool = CONNECTION_STRING ? new Pool({
   connectionString: CONNECTION_STRING,
   max: 10,
@@ -106,6 +106,10 @@ async function initDatabase() {
           ALTER TABLE products ADD COLUMN IF NOT EXISTS household_measure TEXT;
           ALTER TABLE products ADD COLUMN IF NOT EXISTS per_portion JSONB;
 
+          -- Permite produtos cadastrados exclusivamente por foto de tabela nutricional (sem c\xF3digo de barras)
+          ALTER TABLE products ALTER COLUMN barcode DROP NOT NULL;
+          ALTER TABLE products DROP CONSTRAINT IF EXISTS products_barcode_key;
+
           ALTER TABLE products DROP CONSTRAINT IF EXISTS products_data_source_check;
           ALTER TABLE products ADD CONSTRAINT products_data_source_check
             CHECK (data_source IN ('Open Food Facts', 'FatSecret', 'Manual', 'R\xF3tulo', 'IA Gemini', 'TACO/TBCA', 'Banco Local'));
@@ -119,14 +123,14 @@ async function initDatabase() {
   } catch (err) {
     console.warn("Aviso ao aplicar extens\xF5es na tabela products:", err?.message || err);
   }
-  const existing = await pool.query("SELECT 1 FROM app_state WHERE id = $1", [STATE_ID2]);
+  const existing = await pool.query("SELECT 1 FROM app_state WHERE id = $1", [STATE_ID]);
   if (existing.rowCount === 0) {
     const seed = readSeedState();
     await pool.query(
       `INSERT INTO app_state (id, data, updated_at)
        VALUES ($1, $2, $3)
        ON CONFLICT (id) DO NOTHING`,
-      [STATE_ID2, JSON.stringify(seed), seed.lastUpdated || (/* @__PURE__ */ new Date()).toISOString()]
+      [STATE_ID, JSON.stringify(seed), seed.lastUpdated || (/* @__PURE__ */ new Date()).toISOString()]
     );
     console.log("\u{1F331} Estado inicial gravado no Postgres (Neon).");
   }
@@ -136,7 +140,7 @@ async function getAppState() {
   if (!pool) throw new Error("DATABASE_URL n\xE3o configurada");
   const { rows } = await pool.query(
     "SELECT data FROM app_state WHERE id = $1",
-    [STATE_ID2]
+    [STATE_ID]
   );
   return rows.length ? rows[0].data : null;
 }
@@ -153,7 +157,7 @@ async function saveAppState(data) {
      ON CONFLICT (id) DO UPDATE
        SET data = EXCLUDED.data,
            updated_at = EXCLUDED.updated_at`,
-    [STATE_ID2, JSON.stringify(payload), lastUpdated]
+    [STATE_ID, JSON.stringify(payload), lastUpdated]
   );
   return lastUpdated;
 }
@@ -4274,14 +4278,14 @@ app.get("/api/barcode/search-by-name", async (req, res) => {
     items: results
   });
 });
-app.post("/api/barcode/save-product", async (req, res) => {
+var handleSaveProductOrFood = async (req, res) => {
   try {
     const b = req.body || {};
-    const barcode = String(b.barcode || "").trim();
-    const commercialName = String(b.productName || b.commercial_name || "").trim();
-    if (!barcode || !commercialName) {
-      return res.status(400).json({ error: "C\xF3digo de barras e nome do produto s\xE3o obrigat\xF3rios." });
+    const commercialName = String(b.productName || b.commercial_name || b.name || "").trim();
+    if (!commercialName) {
+      return res.status(400).json({ error: "Nome do alimento \xE9 obrigat\xF3rio para o cadastro." });
     }
+    const barcode = b.barcode && String(b.barcode).trim() !== "" ? String(b.barcode).trim() : `FOTO-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const brand = b.brand ? String(b.brand).trim() : null;
     const servingQuantity = Number(b.servingGrams || b.serving_quantity) || 100;
     const servingUnit = String(b.servingSize || b.serving_unit || `${servingQuantity}g`);
@@ -4489,7 +4493,9 @@ app.post("/api/barcode/save-product", async (req, res) => {
     console.error("Erro ao salvar produto:", err);
     return res.status(500).json({ error: "Erro ao salvar produto no banco: " + (err.message || "Erro interno") });
   }
-});
+};
+app.post("/api/barcode/save-product", handleSaveProductOrFood);
+app.post("/api/nutrition/save-food", handleSaveProductOrFood);
 app.post("/api/gemini/read-barcode", async (req, res) => {
   try {
     const { imageBase64, mimeType = "image/jpeg" } = req.body;
