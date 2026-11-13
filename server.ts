@@ -687,7 +687,9 @@ async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
-    const { createServer: createViteServer } = await import('vite');
+    // specifier não-literal para o file-tracer do Vercel não empacotar o vite
+    const vitePkg = 'vite';
+    const { createServer: createViteServer } = await import(vitePkg);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
