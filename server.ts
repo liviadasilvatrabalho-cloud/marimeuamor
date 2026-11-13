@@ -87,31 +87,42 @@ async function callGeminiRest(
   const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_KEY || '';
   if (!apiKey) throw new Error('Chave GEMINI_API_KEY não configurada no servidor.');
 
+  const cleanModel = model.replace(/^models\//, '');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
+    cleanModel
   )}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   let parts: any[] = [];
   if (typeof params.contents === 'string') {
     parts = [{ text: params.contents }];
   } else if (params.contents?.parts) {
-    parts = params.contents.parts.map((p: any) => {
-      if (p.inlineData) {
-        return {
-          inlineData: {
-            mimeType: p.inlineData.mimeType,
-            data: p.inlineData.data,
-          },
-        };
-      }
-      return p;
-    });
+    parts = params.contents.parts;
   } else if (Array.isArray(params.contents)) {
-    parts = params.contents;
+    if (params.contents[0]?.parts) {
+      parts = params.contents[0].parts;
+    } else {
+      parts = params.contents;
+    }
   }
 
+  const cleanParts = parts.map((p: any) => {
+    if (p.inlineData || p.inline_data) {
+      const id = p.inlineData || p.inline_data;
+      return {
+        inlineData: {
+          mimeType: id.mimeType || id.mime_type || 'image/jpeg',
+          data: id.data,
+        },
+      };
+    }
+    if (p.text !== undefined) {
+      return { text: String(p.text) };
+    }
+    return p;
+  });
+
   const body: any = {
-    contents: [{ role: 'user', parts }],
+    contents: [{ role: 'user', parts: cleanParts }],
     generationConfig: {
       temperature: params.temperature ?? 0.2,
       responseMimeType: params.responseMimeType || 'application/json',
@@ -125,7 +136,7 @@ async function callGeminiRest(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 9000);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -137,7 +148,7 @@ async function callGeminiRest(
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`REST API ${model} HTTP ${res.status}: ${errText}`);
+    throw new Error(`REST API ${cleanModel} HTTP ${res.status}: ${errText}`);
   }
 
   const data: any = await res.json();
@@ -145,7 +156,7 @@ async function callGeminiRest(
   return { text };
 }
 
-// Helper universal com modelos Gemini modernos (gemini-2.0-flash / gemini-1.5-flash) com fallback
+// Helper universal com Gemini 3.5 Flash-Lite (atualizado conforme documentação oficial) e fallback
 async function callGemini(params: {
   contents: any;
   systemInstruction?: string;
@@ -153,15 +164,43 @@ async function callGemini(params: {
   responseSchema?: any;
   temperature?: number;
 }) {
-  // Modelos oficiais com suporte de visão multimodal disponíveis na v1beta
+  // Lista de modelos oficiais atualizada: gemini-3.5-flash-lite prioritário
   const candidateModels = [
+    'gemini-3.5-flash-lite',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-2.0-flash-lite',
   ];
+
+  // Normaliza o contents para compatibilidade máxima com SDK e REST
+  let normalizedSdkContents: any;
+  if (typeof params.contents === 'string') {
+    normalizedSdkContents = params.contents;
+  } else if (params.contents?.parts) {
+    normalizedSdkContents = [
+      {
+        role: 'user',
+        parts: params.contents.parts.map((p: any) => {
+          if (p.inlineData || p.inline_data) {
+            const id = p.inlineData || p.inline_data;
+            return {
+              inlineData: {
+                mimeType: id.mimeType || id.mime_type || 'image/jpeg',
+                data: id.data,
+              },
+            };
+          }
+          return p;
+        }),
+      },
+    ];
+  } else {
+    normalizedSdkContents = params.contents;
+  }
 
   let lastError: any = null;
   for (const model of candidateModels) {
+    const cleanModel = model.replace(/^models\//, '');
+
     // 1. Tentar via SDK oficial com API v1beta
     try {
       const config: any = {};
@@ -171,8 +210,8 @@ async function callGemini(params: {
       if (params.temperature !== undefined) config.temperature = params.temperature;
 
       const response = await ai.models.generateContent({
-        model,
-        contents: params.contents,
+        model: cleanModel,
+        contents: normalizedSdkContents,
         config: Object.keys(config).length > 0 ? config : undefined,
       });
       if (response && response.text) {
@@ -180,7 +219,7 @@ async function callGemini(params: {
       }
     } catch (err: any) {
       lastError = err;
-      console.warn(`Tentativa SDK modelo ${model} falhou:`, err?.message || err);
+      console.warn(`Tentativa SDK modelo ${cleanModel} falhou:`, err?.message || err);
 
       // Se falhou e tinha responseSchema, tenta novamente via SDK sem schema (apenas JSON MIME)
       if (params.responseSchema) {
@@ -190,8 +229,8 @@ async function callGemini(params: {
           if (params.responseMimeType) configNoSchema.responseMimeType = params.responseMimeType;
           if (params.temperature !== undefined) configNoSchema.temperature = params.temperature;
           const retryResponse = await ai.models.generateContent({
-            model,
-            contents: params.contents,
+            model: cleanModel,
+            contents: normalizedSdkContents,
             config: Object.keys(configNoSchema).length > 0 ? configNoSchema : undefined,
           });
           if (retryResponse && retryResponse.text) {
@@ -199,20 +238,20 @@ async function callGemini(params: {
           }
         } catch (retryErr: any) {
           lastError = retryErr;
-          console.warn(`Tentativa SDK sem schema em ${model} falhou:`, retryErr?.message || retryErr);
+          console.warn(`Tentativa SDK sem schema em ${cleanModel} falhou:`, retryErr?.message || retryErr);
         }
       }
     }
 
     // 2. Fallback direto REST API v1beta para garantir compatibilidade
     try {
-      const restResponse = await callGeminiRest(model, params);
+      const restResponse = await callGeminiRest(cleanModel, params);
       if (restResponse && restResponse.text) {
         return restResponse;
       }
     } catch (restErr: any) {
       lastError = restErr;
-      console.warn(`Tentativa REST v1beta em ${model} falhou:`, restErr?.message || restErr);
+      console.warn(`Tentativa REST v1beta em ${cleanModel} falhou:`, restErr?.message || restErr);
     }
   }
 
