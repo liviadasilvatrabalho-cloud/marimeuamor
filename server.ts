@@ -52,24 +52,99 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize Google Gemini SDK on the server side
+// Initialize Google Gemini SDK on the server side with v1beta API version support
+process.env.GOOGLE_GENAI_API_VERSION = 'v1beta';
+
 const GEMINI_API_KEY =
   process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_KEY || '';
 
 const ai = new GoogleGenAI({
   apiKey: GEMINI_API_KEY,
+  apiVersion: 'v1beta',
   httpOptions: {
+    apiVersion: 'v1beta',
     headers: {
       'User-Agent': 'aistudio-build',
     },
-    // Sem retry interno (o padrão são 5 tentativas com backoff, o que estoura
-    // o maxDuration de 60s do Vercel) e teto de 18s por tentativa.
+    // Sem retry interno longo (o padrão do SDK são 5 tentativas com backoff que estouram
+    // o timeout serverless do Vercel) e teto de 25s por tentativa.
     retryOptions: { attempts: 1 },
-    timeout: 18000,
+    timeout: 25000,
   },
 });
 
-// Helper universal com fallback automático de modelos Gemini reais
+// Helper direto via REST API v1beta (garante compatibilidade máxima caso o SDK tenha divergência de versão)
+async function callGeminiRest(
+  model: string,
+  params: {
+    contents: any;
+    systemInstruction?: string;
+    responseMimeType?: string;
+    temperature?: number;
+  }
+) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_KEY || '';
+  if (!apiKey) throw new Error('Chave GEMINI_API_KEY não configurada no servidor.');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  let parts: any[] = [];
+  if (typeof params.contents === 'string') {
+    parts = [{ text: params.contents }];
+  } else if (params.contents?.parts) {
+    parts = params.contents.parts.map((p: any) => {
+      if (p.inlineData) {
+        return {
+          inline_data: {
+            mime_type: p.inlineData.mimeType,
+            data: p.inlineData.data,
+          },
+        };
+      }
+      return p;
+    });
+  } else if (Array.isArray(params.contents)) {
+    parts = params.contents;
+  }
+
+  const body: any = {
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      temperature: params.temperature ?? 0.2,
+      responseMimeType: params.responseMimeType || 'application/json',
+    },
+  };
+
+  if (params.systemInstruction) {
+    body.systemInstruction = {
+      parts: [{ text: params.systemInstruction }],
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 22000);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: controller.signal,
+  });
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`REST API ${model} HTTP ${res.status}: ${errText}`);
+  }
+
+  const data: any = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return { text };
+}
+
+// Helper universal com modelos Gemini modernos (preferencialmente gemini-3.8-flash) e fallback automático
 async function callGemini(params: {
   contents: any;
   systemInstruction?: string;
@@ -77,16 +152,19 @@ async function callGemini(params: {
   responseSchema?: any;
   temperature?: number;
 }) {
+  // Lista de modelos atualizados com suporte a visão multimodal (removido modelo obsoleto gemini-1.5-pro)
   const candidateModels = [
+    'gemini-3.8-flash',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
+    'gemini-2.0-flash-exp',
     'gemini-2.5-pro',
-    'gemini-1.5-pro',
   ];
 
   let lastError: any = null;
   for (const model of candidateModels) {
+    // 1. Tentar via SDK oficial com API v1beta
     try {
       const config: any = {};
       if (params.systemInstruction) config.systemInstruction = params.systemInstruction;
@@ -99,12 +177,14 @@ async function callGemini(params: {
         contents: params.contents,
         config: Object.keys(config).length > 0 ? config : undefined,
       });
-      return response;
+      if (response && response.text) {
+        return response;
+      }
     } catch (err: any) {
       lastError = err;
-      console.warn(`Tentativa com modelo ${model} falhou:`, err?.message || err);
+      console.warn(`Tentativa SDK modelo ${model} falhou:`, err?.message || err);
 
-      // Se falhou e tinha responseSchema, tenta novamente sem schema (usando apenas application/json)
+      // Se falhou e tinha responseSchema, tenta novamente via SDK sem schema (apenas JSON MIME)
       if (params.responseSchema) {
         try {
           const configNoSchema: any = {};
@@ -116,15 +196,29 @@ async function callGemini(params: {
             contents: params.contents,
             config: Object.keys(configNoSchema).length > 0 ? configNoSchema : undefined,
           });
-          return retryResponse;
+          if (retryResponse && retryResponse.text) {
+            return retryResponse;
+          }
         } catch (retryErr: any) {
           lastError = retryErr;
-          console.warn(`Tentativa sem schema no modelo ${model} também falhou:`, retryErr?.message || retryErr);
+          console.warn(`Tentativa SDK sem schema em ${model} falhou:`, retryErr?.message || retryErr);
         }
       }
     }
+
+    // 2. Fallback direto REST API v1beta para garantir compatibilidade
+    try {
+      const restResponse = await callGeminiRest(model, params);
+      if (restResponse && restResponse.text) {
+        return restResponse;
+      }
+    } catch (restErr: any) {
+      lastError = restErr;
+      console.warn(`Tentativa REST v1beta em ${model} falhou:`, restErr?.message || restErr);
+    }
   }
-  throw lastError;
+
+  throw lastError || new Error('Nenhum modelo Gemini atualizado conseguiu responder à solicitação.');
 }
 
 // ---------------- API ROUTES ----------------
@@ -246,6 +340,7 @@ const MEAL_ANALYSIS_SCHEMA = {
           prepState: { type: Type.STRING },
           portionGrams: { type: Type.NUMBER },
           portionReasoning: { type: Type.STRING },
+          probableIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
           kcalPer100g: { type: Type.NUMBER },
           proteinPer100g: { type: Type.NUMBER },
           carbsPer100g: { type: Type.NUMBER },
@@ -329,6 +424,9 @@ function normalizeMealAnalysis(parsed: any) {
         prepState: String(it?.prepState || 'cozido').slice(0, 60),
         portionGrams: portion,
         portionReasoning: String(it?.portionReasoning || '').slice(0, 300),
+        probableIngredients: Array.isArray(it?.probableIngredients)
+          ? it.probableIngredients.map(String).slice(0, 10)
+          : (it?.probableIngredients ? [String(it.probableIngredients)] : []),
         kcalPer100g: Math.round(kcal100),
         // Matemática exata no servidor: porção × valor/100g
         calories: Math.round((portion * kcal100) / 100),
@@ -451,6 +549,7 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
       "prepState": "grelhado",
       "portionGrams": 130,
       "portionReasoning": "Porção média com base na escala visual ≈ 130g",
+      "probableIngredients": ["peito de frango", "alho", "azeite", "sal"],
       "kcalPer100g": 159,
       "proteinPer100g": 32,
       "carbsPer100g": 0,
@@ -1367,6 +1466,8 @@ app.post('/api/barcode/save-product', async (req, res) => {
     const addedSugarsPer100 = p100.addedSugars != null ? Number(p100.addedSugars) : null;
     const sodiumPer100 = p100.sodium != null ? Number(p100.sodium) : null;
 
+    const householdMeasure = b.householdMeasure || b.household_measure || null;
+    const perPortion = b.perPortion || b.per_portion || null;
     const caloriesPerServing = Math.round((caloriesPer100 * servingQuantity) / 100);
     const dataSource = b.source || 'Banco Local';
     const verificationStatus = b.verificationStatus || 'user_confirmed';
@@ -1405,20 +1506,24 @@ app.post('/api/barcode/save-product', async (req, res) => {
       const upsertSql = `
         INSERT INTO products (
           kitchen_space_id, created_by, barcode, commercial_name, brand,
-          serving_quantity, serving_unit, calories_per_serving, calories_per_100,
-          protein_per_100, carbs_per_100, fat_per_100, fiber_per_100, sodium_per_100,
-          sugars_per_100, added_sugars_per_100, saturated_fat_per_100, trans_fat_per_100,
-          image_path, ingredients, data_source, provenance, confidence_score,
-          verification_status, updated_at, last_updated_at
+          serving_quantity, serving_unit, household_measure, per_portion,
+          calories_per_serving, calories_per_100, protein_per_100, carbs_per_100,
+          fat_per_100, fiber_per_100, sodium_per_100, sugars_per_100, added_sugars_per_100,
+          saturated_fat_per_100, trans_fat_per_100, image_path, ingredients,
+          data_source, provenance, confidence_score, verification_status,
+          updated_at, last_updated_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-          $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now(), now()
+          $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+          now(), now()
         )
         ON CONFLICT (barcode) DO UPDATE SET
           commercial_name = EXCLUDED.commercial_name,
           brand = COALESCE(EXCLUDED.brand, products.brand),
           serving_quantity = EXCLUDED.serving_quantity,
           serving_unit = EXCLUDED.serving_unit,
+          household_measure = COALESCE(EXCLUDED.household_measure, products.household_measure),
+          per_portion = COALESCE(EXCLUDED.per_portion, products.per_portion),
           calories_per_serving = EXCLUDED.calories_per_serving,
           calories_per_100 = EXCLUDED.calories_per_100,
           protein_per_100 = EXCLUDED.protein_per_100,
@@ -1450,6 +1555,8 @@ app.post('/api/barcode/save-product', async (req, res) => {
         brand,
         servingQuantity,
         servingUnit,
+        householdMeasure,
+        perPortion ? JSON.stringify(perPortion) : null,
         caloriesPerServing,
         caloriesPer100,
         proteinPer100,
@@ -1468,6 +1575,49 @@ app.post('/api/barcode/save-product', async (req, res) => {
         confidenceScore,
         verificationStatus,
       ]);
+
+      savedProduct = rows[0];
+
+      // Sincroniza também no documento app_state (customFoods) para carregar offline instantaneamente
+      try {
+        const stateRes = await pool.query('SELECT data FROM app_state WHERE id = $1', [STATE_ID]);
+        if (stateRes.rows.length) {
+          const stateData = stateRes.rows[0].data || {};
+          const currentCustom = Array.isArray(stateData.customFoods) ? stateData.customFoods : [];
+          const customItem = {
+            id: `food-${Date.now()}`,
+            name: commercialName,
+            brand: brand || undefined,
+            barcode: barcode || undefined,
+            portionGrams: servingQuantity,
+            calories: caloriesPerServing,
+            protein: Number(((proteinPer100 * servingQuantity) / 100).toFixed(1)),
+            carbs: Number(((carbsPer100 * servingQuantity) / 100).toFixed(1)),
+            fat: Number(((fatPer100 * servingQuantity) / 100).toFixed(1)),
+            fiber: Number(((fiberPer100 * servingQuantity) / 100).toFixed(1)),
+            sodium: sodiumPer100 != null ? Math.round((sodiumPer100 * servingQuantity) / 100) : undefined,
+            sugars: sugarsPer100 != null ? Number(((sugarsPer100 * servingQuantity) / 100).toFixed(1)) : undefined,
+            saturatedFat: saturatedFatPer100 != null ? Number(((saturatedFatPer100 * servingQuantity) / 100).toFixed(1)) : undefined,
+            transFat: transFatPer100 != null ? Number(((transFatPer100 * servingQuantity) / 100).toFixed(1)) : undefined,
+            per100g: p100,
+            householdMeasure: householdMeasure || undefined,
+            source: dataSource,
+            verified: true,
+            confidenceScore,
+            provenance,
+          };
+          const updatedCustom = [
+            customItem,
+            ...currentCustom.filter((f: any) => f.barcode !== barcode && f.name !== commercialName),
+          ];
+          await pool.query(
+            "UPDATE app_state SET data = jsonb_set(data, '{customFoods}', $1::jsonb), updated_at = now() WHERE id = $2",
+            [JSON.stringify(updatedCustom), STATE_ID]
+          );
+        }
+      } catch (syncErr) {
+        console.warn('Sincronização em app_state customFoods:', syncErr);
+      }
 
       savedProduct = rows[0];
 

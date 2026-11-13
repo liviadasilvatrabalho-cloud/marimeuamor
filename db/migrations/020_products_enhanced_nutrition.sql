@@ -10,6 +10,8 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS ingredients TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS confidence_score NUMERIC(5,2);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS provenance JSONB;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition_source TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS household_measure TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS per_portion JSONB;
 
 -- 2. Relaxar check constraints legadas para permitir novas fontes e status
 ALTER TABLE products DROP CONSTRAINT IF EXISTS products_data_source_check;

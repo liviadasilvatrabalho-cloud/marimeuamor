@@ -135,6 +135,8 @@ export async function initDatabase() {
           ALTER TABLE products ADD COLUMN IF NOT EXISTS confidence_score NUMERIC(5,2);
           ALTER TABLE products ADD COLUMN IF NOT EXISTS provenance JSONB;
           ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition_source TEXT;
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS household_measure TEXT;
+          ALTER TABLE products ADD COLUMN IF NOT EXISTS per_portion JSONB;
 
           ALTER TABLE products DROP CONSTRAINT IF EXISTS products_data_source_check;
           ALTER TABLE products ADD CONSTRAINT products_data_source_check

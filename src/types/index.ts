@@ -52,6 +52,7 @@ export interface FoodItem {
   carbs: number;
   fat: number;
   fiber: number;
+  probableIngredients?: string[];
   sugars?: number;
   addedSugars?: number;
   saturatedFat?: number;
