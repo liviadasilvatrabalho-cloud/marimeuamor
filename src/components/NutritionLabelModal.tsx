@@ -388,11 +388,11 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
         carbs: carbsPer100,
         fat: fatPer100,
         fiber: fiberPer100,
-        sodium: sodiumPer100,
-        sugars: sugarsPer100,
-        addedSugars: addedSugarsPer100,
-        saturatedFat: saturatedFatPer100,
-        transFat: transFatPer100,
+        sodium: sodiumPer100 ?? undefined,
+        sugars: sugarsPer100 ?? undefined,
+        addedSugars: addedSugarsPer100 ?? undefined,
+        saturatedFat: saturatedFatPer100 ?? undefined,
+        transFat: transFatPer100 ?? undefined,
       };
 
       // Calorias da porção: se foram declaradas no rótulo, usa as declaradas sem recalcular!

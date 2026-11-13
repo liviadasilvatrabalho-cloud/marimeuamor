@@ -23,6 +23,7 @@ export type NutritionSource =
   | 'Open Food Facts'
   | 'FatSecret'
   | 'Rótulo OCR'
+  | 'Foto da Tabela'
   | 'IA'
   | 'IA Gemini'
   | 'Manual'

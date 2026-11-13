@@ -51,6 +51,7 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   onDeleteMeal,
   onDeleteFoodItem,
   onUpdateFoodItemGrams,
+  onUpdateMealSlots,
   onAddMealItem,
   onTogglePlannedMeal,
   onNavigateToMeusAlimentos,
@@ -857,7 +858,7 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                       type="button"
                       onClick={() => {
                         setSelectedFoodToInsert(f);
-                        setInsertGrams(f.portionGrams || 100);
+                        setInsertGrams(String(f.portionGrams || 100));
                       }}
                       className="w-full p-2.5 rounded-xl bg-[#181022] hover:bg-[#20152B] border border-[#2D1B3E] hover:border-[#8B5CF6] text-left flex items-center justify-between gap-2 transition-colors cursor-pointer"
                     >
