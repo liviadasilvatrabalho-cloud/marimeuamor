@@ -53,7 +53,7 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
 
   // Consume / Add to Meal Dialog
   const [consumingFood, setConsumingFood] = useState<FoodItem | null>(null);
-  const [consumeGrams, setConsumeGrams] = useState<number>(100);
+  const [consumeGrams, setConsumeGrams] = useState<string>('100');
   const [consumeMealType, setConsumeMealType] = useState<MealType>('almoco');
   const [consumeDate, setConsumeDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [consumeAsPlanned, setConsumeAsPlanned] = useState<boolean>(false);
@@ -258,7 +258,7 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
 
   const handleOpenConsume = (food: FoodItem) => {
     setConsumingFood(food);
-    setConsumeGrams(food.portionGrams || 100);
+    setConsumeGrams(String(food.portionGrams || 100));
     setConsumeMealType('almoco');
     setConsumeDate(new Date().toISOString().split('T')[0]);
     setConsumeAsPlanned(false);
@@ -267,7 +267,8 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
   const handleConfirmConsume = () => {
     if (!consumingFood) return;
 
-    const grams = Math.max(1, consumeGrams || 100);
+    const parsedGrams = parseFloat(String(consumeGrams).replace(',', '.')) || 100;
+    const grams = Math.max(1, parsedGrams);
     const p100 = consumingFood.per100g || {
       calories: ((consumingFood.calories || 0) / (consumingFood.portionGrams || 100)) * 100,
       protein: ((consumingFood.protein || 0) / (consumingFood.portionGrams || 100)) * 100,
@@ -302,7 +303,8 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
       fat: ((consumingFood.fat || 0) / (consumingFood.portionGrams || 100)) * 100,
       fiber: ((consumingFood.fiber || 0) / (consumingFood.portionGrams || 100)) * 100,
     };
-    const ratio = Math.max(1, consumeGrams || 1) / 100;
+    const parsed = parseFloat(String(consumeGrams).replace(',', '.')) || 0;
+    const ratio = Math.max(0, parsed) / 100;
     return {
       calories: formatPtBr(Number(((p100.calories || 0) * ratio).toFixed(1))),
       protein: formatPtBr(Number(((p100.protein || 0) * ratio).toFixed(2))),
@@ -568,11 +570,15 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
                 </label>
                 <div className="flex items-center gap-1.5">
                   <input
-                    type="number"
-                    min="1"
-                    max="2000"
+                    type="text"
+                    inputMode="decimal"
                     value={consumeGrams}
-                    onChange={(e) => setConsumeGrams(Math.max(1, parseFloat(e.target.value) || 1))}
+                    onChange={(e) => setConsumeGrams(e.target.value.replace(/[^0-9.,]/g, ''))}
+                    onBlur={() => {
+                      const val = parseFloat(consumeGrams.replace(',', '.'));
+                      if (!val || val <= 0) setConsumeGrams('100');
+                    }}
+                    placeholder="100"
                     className="w-20 px-2.5 py-1 text-center font-bold text-xs bg-[#120B19] border border-[#8B5CF6]/50 rounded-lg text-[#FAF8FC] focus:outline-none"
                   />
                   <span className="text-xs text-[#B5A8C8]">g</span>
@@ -584,8 +590,8 @@ export const MeusAlimentos: React.FC<MeusAlimentosProps> = ({
                 min="10"
                 max="500"
                 step="5"
-                value={consumeGrams}
-                onChange={(e) => setConsumeGrams(Number(e.target.value))}
+                value={parseFloat(consumeGrams.replace(',', '.')) || 10}
+                onChange={(e) => setConsumeGrams(e.target.value)}
                 className="w-full accent-[#EC4899] cursor-pointer"
               />
 

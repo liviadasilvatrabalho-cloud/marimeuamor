@@ -4,11 +4,7 @@ const MARI_PROFILE_ID = '33333333-3333-3333-3333-333333333333';
 
 function profileHeaders(extra?: Record<string, string>): Record<string, string> {
   const h: Record<string, string> = { ...(extra || {}) };
-  try {
-    if (import.meta.env?.DEV) h['X-Profile-ID'] = MARI_PROFILE_ID;
-  } catch {
-    /* ignore: fora do Vite */
-  }
+  h['X-Profile-ID'] = MARI_PROFILE_ID;
   return h;
 }
 

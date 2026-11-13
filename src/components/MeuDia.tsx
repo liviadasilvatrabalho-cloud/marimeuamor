@@ -64,13 +64,20 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
 
   // Inline Grams Editor State
   const [editingFoodKey, setEditingFoodKey] = useState<string | null>(null);
-  const [editingGrams, setEditingGrams] = useState<number>(100);
+  const [editingGrams, setEditingGrams] = useState<string>('100');
 
   // Food Picker Modal State (to pick from Meus Alimentos directly into any slot)
   const [foodPickerSlot, setFoodPickerSlot] = useState<{ mealType: MealType; isPlanned: boolean } | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const [selectedFoodToInsert, setSelectedFoodToInsert] = useState<FoodItem | null>(null);
-  const [insertGrams, setInsertGrams] = useState<number>(100);
+  const [insertGrams, setInsertGrams] = useState<string>('100');
+
+  // Add & Delete Meal Slot State
+  const [isAddingMealSlot, setIsAddingMealSlot] = useState(false);
+  const [newSlotLabel, setNewSlotLabel] = useState('');
+  const [newSlotTime, setNewSlotTime] = useState('');
+  const [newSlotIcon, setNewSlotIcon] = useState('🍽️');
+  const [slotToDelete, setSlotToDelete] = useState<MealSlot | null>(null);
 
   // Mark Planned Meal as Consumed Modal State
   const [mealToConsume, setMealToConsume] = useState<MealLog | null>(null);
@@ -220,7 +227,8 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   const handleConfirmInsertFromPicker = () => {
     if (!foodPickerSlot || !selectedFoodToInsert) return;
 
-    const grams = Math.max(1, insertGrams || 100);
+    const parsedGrams = parseFloat(String(insertGrams).replace(',', '.')) || 100;
+    const grams = Math.max(1, parsedGrams);
     const p100 = selectedFoodToInsert.per100g || {
       calories: ((selectedFoodToInsert.calories || 0) / (selectedFoodToInsert.portionGrams || 100)) * 100,
       protein: ((selectedFoodToInsert.protein || 0) / (selectedFoodToInsert.portionGrams || 100)) * 100,
@@ -507,6 +515,17 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                       +{formatPtBr(slotPlannedCals)} planejado
                     </span>
                   )}
+
+                  {onUpdateMealSlots && (
+                    <button
+                      type="button"
+                      onClick={() => setSlotToDelete(slot)}
+                      className="p-1.5 rounded-xl text-[#7B6E8F] hover:text-rose-400 hover:bg-[#20152B] transition-colors cursor-pointer"
+                      title={`Excluir refeição ${slot.label}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -560,18 +579,23 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                               {isEditingThis ? (
                                 <div className="flex items-center gap-1">
                                   <input
-                                    type="number"
-                                    min="1"
-                                    max="2000"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={editingGrams}
-                                    onChange={(e) => setEditingGrams(parseFloat(e.target.value) || 1)}
-                                    className="w-16 px-1 py-0.5 bg-[#120B19] border border-[#8B5CF6] text-xs font-bold text-center text-white rounded"
+                                    onChange={(e) => setEditingGrams(e.target.value.replace(/[^0-9.,]/g, ''))}
+                                    onBlur={() => {
+                                      const parsed = parseFloat(editingGrams.replace(',', '.'));
+                                      if (!parsed || parsed <= 0) setEditingGrams('100');
+                                    }}
+                                    placeholder="100"
+                                    className="w-16 px-1 py-0.5 bg-[#120B19] border border-[#8B5CF6] text-xs font-bold text-center text-white rounded focus:outline-none"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => {
                                       if (onUpdateFoodItemGrams) {
-                                        onUpdateFoodItemGrams(meal.id, food.id, editingGrams);
+                                        const parsed = Math.max(1, parseFloat(editingGrams.replace(',', '.')) || 100);
+                                        onUpdateFoodItemGrams(meal.id, food.id, parsed);
                                       }
                                       setEditingFoodKey(null);
                                     }}
@@ -592,7 +616,7 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setEditingFoodKey(`${meal.id}-${food.id}`);
-                                    setEditingGrams(food.portionGrams || 100);
+                                    setEditingGrams(String(food.portionGrams || 100));
                                   }}
                                   className="p-1 rounded-md text-[#B5A8C8] hover:text-[#FAF8FC] hover:bg-[#20152B]"
                                   title="Alterar gramas"
@@ -747,6 +771,23 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
             </div>
           );
         })}
+
+        {/* Botão para Adicionar Nova Refeição na Rotina Diária */}
+        {onUpdateMealSlots && (
+          <button
+            type="button"
+            onClick={() => {
+              setNewSlotLabel('');
+              setNewSlotTime('15:00 - 16:00');
+              setNewSlotIcon('🍽️');
+              setIsAddingMealSlot(true);
+            }}
+            className="w-full py-3.5 rounded-2xl border border-dashed border-[#322046] hover:border-[#8B5CF6]/70 bg-[#140E1B]/50 hover:bg-[#1A1224] text-xs font-semibold text-[#B5A8C8] hover:text-[#FAF8FC] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+          >
+            <Plus className="w-4 h-4 text-[#A78BFA]" />
+            <span>+ Adicionar refeição na rotina</span>
+          </button>
+        )}
       </div>
 
       {/* ============================================================ */}
@@ -860,11 +901,15 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                   </label>
                   <div className="flex items-center gap-1.5">
                     <input
-                      type="number"
-                      min="1"
-                      max="2000"
+                      type="text"
+                      inputMode="decimal"
                       value={insertGrams}
-                      onChange={(e) => setInsertGrams(Math.max(1, parseFloat(e.target.value) || 1))}
+                      onChange={(e) => setInsertGrams(e.target.value.replace(/[^0-9.,]/g, ''))}
+                      onBlur={() => {
+                        const parsed = parseFloat(insertGrams.replace(',', '.'));
+                        if (!parsed || parsed <= 0) setInsertGrams('100');
+                      }}
+                      placeholder="100"
                       className="w-20 px-2 py-1 text-center font-bold text-xs bg-[#120B19] border border-[#8B5CF6] rounded-lg text-[#FAF8FC] focus:outline-none"
                     />
                     <span className="text-xs text-[#B5A8C8]">g</span>
@@ -876,8 +921,8 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                   min="10"
                   max="500"
                   step="5"
-                  value={insertGrams}
-                  onChange={(e) => setInsertGrams(Number(e.target.value))}
+                  value={parseFloat(insertGrams.replace(',', '.')) || 10}
+                  onChange={(e) => setInsertGrams(e.target.value)}
                   className="w-full accent-[#EC4899] cursor-pointer"
                 />
 
@@ -888,7 +933,8 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                     carbs: selectedFoodToInsert.carbs,
                     fat: selectedFoodToInsert.fat,
                   };
-                  const ratio = Math.max(1, insertGrams || 1) / 100;
+                  const parsed = parseFloat(insertGrams.replace(',', '.')) || 0;
+                  const ratio = Math.max(0, parsed) / 100;
                   const cals = formatPtBr(Number(((p100.calories || 0) * ratio).toFixed(1)));
                   const prot = formatPtBr(Number(((p100.protein || 0) * ratio).toFixed(2)));
                   const carb = formatPtBr(Number(((p100.carbs || 0) * ratio).toFixed(2)));
@@ -969,11 +1015,20 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <input
-                        type="number"
-                        min="1"
-                        max="2000"
-                        value={f.portionGrams}
-                        onChange={(e) => handleAdjustGramsInPlan(idx, parseFloat(e.target.value) || 1)}
+                        type="text"
+                        inputMode="decimal"
+                        value={f.portionGrams === 0 ? '' : f.portionGrams}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.,]/g, '');
+                          const num = parseFloat(val.replace(',', '.'));
+                          handleAdjustGramsInPlan(idx, isNaN(num) ? 0 : num);
+                        }}
+                        onBlur={() => {
+                          if (!f.portionGrams || f.portionGrams <= 0) {
+                            handleAdjustGramsInPlan(idx, 100);
+                          }
+                        }}
+                        placeholder="100"
                         className="w-16 px-2 py-1 text-center font-bold text-xs bg-[#120B19] border border-emerald-500/40 rounded-lg text-[#FAF8FC] focus:outline-none"
                       />
                       <span className="text-xs text-[#B5A8C8]">g</span>
@@ -1005,6 +1060,172 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
               >
                 <Check className="w-4 h-4" />
                 <span>Confirmar Consumo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: ADICIONAR NOVA REFEIÇÃO / HORÁRIO NA ROTINA           */}
+      {/* ============================================================ */}
+      {isAddingMealSlot && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-md bg-[#140E1B] border border-[#8B5CF6]/50 rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#2D1B3E]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#6D28D9] to-[#EC4899] text-white flex items-center justify-center text-lg shadow-md shadow-[#6D28D9]/30">
+                  {newSlotIcon}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#FAF8FC]">
+                    Adicionar Nova Refeição 🌸
+                  </h3>
+                  <p className="text-[11px] text-[#B5A8C8]">
+                    Crie um novo horário na rotina diária da Mari
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingMealSlot(false)}
+                className="p-1.5 rounded-lg text-[#B5A8C8] hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {/* Nome da Refeição */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#FAF8FC]">Nome da Refeição:</label>
+                <input
+                  type="text"
+                  required
+                  value={newSlotLabel}
+                  onChange={(e) => setNewSlotLabel(e.target.value)}
+                  placeholder="Ex: Pré-Treino, Ceia, Colação, Lanche..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#1A1224] border border-[#322046] focus:border-[#8B5CF6] text-xs font-medium text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none"
+                />
+              </div>
+
+              {/* Horário Sugerido */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#FAF8FC]">Horário Sugerido:</label>
+                <input
+                  type="text"
+                  value={newSlotTime}
+                  onChange={(e) => setNewSlotTime(e.target.value)}
+                  placeholder="Ex: 15:00 - 15:30"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#1A1224] border border-[#322046] focus:border-[#8B5CF6] text-xs font-medium text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none"
+                />
+              </div>
+
+              {/* Escolha do Ícone */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#FAF8FC]">Ícone:</label>
+                <div className="flex flex-wrap gap-2">
+                  {['☕', '🍌', '🥗', '🍎', '🍲', '🌙', '🥣', '🥪', '🥑', '🍓', '🏋️‍♀️', '🍳', '🍽️', '🥤', '🍰'].map((ico) => (
+                    <button
+                      key={ico}
+                      type="button"
+                      onClick={() => setNewSlotIcon(ico)}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg border transition-all cursor-pointer ${
+                        newSlotIcon === ico
+                          ? 'bg-[#2A173B] border-[#EC4899] scale-110 shadow-md'
+                          : 'bg-[#181022] border-[#322046] hover:border-[#8B5CF6]'
+                      }`}
+                    >
+                      {ico}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#2D1B3E]">
+              <button
+                type="button"
+                onClick={() => setIsAddingMealSlot(false)}
+                className="px-4 py-2 rounded-xl bg-[#1A1224] border border-[#322046] text-xs font-medium text-[#B5A8C8] hover:text-white cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const label = newSlotLabel.trim();
+                  if (!label) return;
+                  const newSlot: MealSlot = {
+                    id: `slot_${Date.now()}`,
+                    label,
+                    timeHint: newSlotTime.trim() || 'Horário livre',
+                    icon: newSlotIcon || '🍽️',
+                  };
+                  if (onUpdateMealSlots) {
+                    onUpdateMealSlots([...slots, newSlot]);
+                  }
+                  setIsAddingMealSlot(false);
+                }}
+                disabled={!newSlotLabel.trim()}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] hover:brightness-110 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Salvar Refeição</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: EXCLUIR REFEIÇÃO / HORÁRIO DA ROTINA                  */}
+      {/* ============================================================ */}
+      {slotToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-sm bg-[#140E1B] border border-rose-500/40 rounded-3xl p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#FAF8FC]">
+                  Excluir {slotToDelete.label}?
+                </h3>
+                <p className="text-[11px] text-[#B5A8C8]">
+                  Esta refeição será removida da sua rotina diária.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#1A1224] border border-[#322046] text-xs text-[#B5A8C8] flex items-center gap-2">
+              <span className="text-lg">{slotToDelete.icon}</span>
+              <div>
+                <span className="font-bold text-[#FAF8FC] block">{slotToDelete.label}</span>
+                <span className="text-[10px] text-[#7B6E8F]">{slotToDelete.timeHint}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSlotToDelete(null)}
+                className="px-4 py-2 rounded-xl bg-[#1A1224] border border-[#322046] text-xs font-medium text-[#B5A8C8] hover:text-white cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onUpdateMealSlots) {
+                    onUpdateMealSlots(slots.filter((s) => s.id !== slotToDelete.id));
+                  }
+                  setSlotToDelete(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Excluir Refeição</span>
               </button>
             </div>
           </div>

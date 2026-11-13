@@ -24,13 +24,14 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
   onUpdateProfile,
 }) => {
   const [userName, setUserName] = useState<string>('Mari');
-  const [calorieGoal, setCalorieGoal] = useState<number>(user.calorieGoal || 2000);
+  const [calorieGoal, setCalorieGoal] = useState<string>(String(user.calorieGoal || 2000));
   const [isSavedToast, setIsSavedToast] = useState(false);
 
   const handleSaveProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmedName = userName.trim() || 'Mari';
-    const validGoal = Math.max(500, Math.min(8000, calorieGoal || 2000));
+    const parsedGoal = parseInt(calorieGoal.replace(/[^0-9]/g, '')) || 2000;
+    const validGoal = Math.max(500, Math.min(8000, parsedGoal));
 
     const updatedUser: UserProfile = {
       ...user,
@@ -44,7 +45,9 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
   };
 
   const handleAdjustCalories = (delta: number) => {
-    setCalorieGoal((prev) => Math.max(500, Math.min(8000, prev + delta)));
+    const current = parseInt(calorieGoal.replace(/[^0-9]/g, '')) || 2000;
+    const next = Math.max(500, Math.min(8000, current + delta));
+    setCalorieGoal(String(next));
   };
 
   return (
@@ -138,11 +141,15 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
 
               <div className="flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-[#181022] border border-[#322046] min-w-[160px] sm:min-w-[190px] shadow-inner">
                 <input
-                  type="number"
-                  min="500"
-                  max="8000"
+                  type="text"
+                  inputMode="numeric"
                   value={calorieGoal}
-                  onChange={(e) => setCalorieGoal(parseInt(e.target.value) || 0)}
+                  onChange={(e) => setCalorieGoal(e.target.value.replace(/[^0-9]/g, ''))}
+                  onBlur={() => {
+                    const parsed = parseInt(calorieGoal.replace(/[^0-9]/g, ''));
+                    if (!parsed || parsed < 500) setCalorieGoal('2000');
+                  }}
+                  placeholder="2000"
                   className="w-24 text-center bg-transparent text-2xl sm:text-3xl font-black text-[#FAF8FC] font-mono-numbers focus:outline-none"
                 />
                 <span className="text-xs font-bold text-[#EC4899] uppercase tracking-wider">

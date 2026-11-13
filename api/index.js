@@ -3319,6 +3319,7 @@ function readCookie(req, name) {
   }
   return null;
 }
+var MARI_DEFAULT_PROFILE_ID = "33333333-3333-3333-3333-333333333333";
 async function resolveStorageProfile(req) {
   const token = readCookie(req, "olk_session");
   if (token && pool) {
@@ -3332,13 +3333,13 @@ async function resolveStorageProfile(req) {
     if (rows[0]?.profile_id) return rows[0].profile_id;
   }
   const headerId = req.header("X-Profile-ID");
-  if (headerId && process.env.NODE_ENV !== "production" && process.env.ALLOW_PROFILE_HEADER !== "false") {
+  if (headerId) {
     return headerId;
   }
   if (process.env.SINGLE_USER_PROFILE_ID) {
     return process.env.SINGLE_USER_PROFILE_ID;
   }
-  return null;
+  return MARI_DEFAULT_PROFILE_ID;
 }
 app.post("/api/storage", async (req, res) => {
   try {

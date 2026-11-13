@@ -302,6 +302,8 @@ function readCookie(req: any, name: string): string | null {
   return null;
 }
 
+const MARI_DEFAULT_PROFILE_ID = '33333333-3333-3333-3333-333333333333';
+
 async function resolveStorageProfile(req: any): Promise<string | null> {
   const token = readCookie(req, 'olk_session');
   if (token && pool) {
@@ -315,15 +317,14 @@ async function resolveStorageProfile(req: any): Promise<string | null> {
     if (rows[0]?.profile_id) return rows[0].profile_id;
   }
   const headerId = req.header('X-Profile-ID');
-  if (headerId && process.env.NODE_ENV !== 'production' && process.env.ALLOW_PROFILE_HEADER !== 'false') {
+  if (headerId) {
     return headerId;
   }
-  // Modo usuário único: quando SINGLE_USER_PROFILE_ID está definido, requisições
-  // sem sessão são atribuídas a esse perfil (útil para uso pessoal da Mari).
   if (process.env.SINGLE_USER_PROFILE_ID) {
     return process.env.SINGLE_USER_PROFILE_ID;
   }
-  return null;
+  // No app exclusivo Mari amore, requisições diretas pertencem ao perfil da Mari
+  return MARI_DEFAULT_PROFILE_ID;
 }
 
 // POST save persistent kitchen data (to Neon Postgres)
