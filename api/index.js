@@ -3133,8 +3133,8 @@ async function callGeminiRest(model, params) {
     parts = params.contents.parts.map((p) => {
       if (p.inlineData) {
         return {
-          inline_data: {
-            mime_type: p.inlineData.mimeType,
+          inlineData: {
+            mimeType: p.inlineData.mimeType,
             data: p.inlineData.data
           }
         };
@@ -3157,7 +3157,7 @@ async function callGeminiRest(model, params) {
     };
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 22e3);
+  const timer = setTimeout(() => controller.abort(), 8e3);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3175,12 +3175,9 @@ async function callGeminiRest(model, params) {
 }
 async function callGemini(params) {
   const candidateModels = [
-    "gemini-3.8-flash",
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
-    "gemini-2.0-flash-exp",
-    "gemini-2.5-pro"
+    "gemini-2.0-flash-lite"
   ];
   let lastError = null;
   for (const model of candidateModels) {

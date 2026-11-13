@@ -378,10 +378,13 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="relative w-full max-w-2xl bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe shadow-2xl max-h-[92vh] overflow-y-auto overflow-x-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#33263F]">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
+      <div
+        className="relative w-full max-w-2xl bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[90dvh] sm:h-auto sm:max-h-[88vh] overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
+      >
+        {/* Header Fixo */}
+        <div className="shrink-0 p-3.5 sm:p-4 border-b border-[#33263F] flex items-center justify-between bg-[#18121F]">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-tr from-[#6D28D9] to-[#EC4899] text-white">
               <Camera className="w-5 h-5" />
@@ -403,8 +406,8 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="py-4 space-y-4">
+        {/* Modal Body Rolável com espaçamento inferior para navegação Android */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 pb-20 sm:pb-6">
           {!isVerifying ? (
             <>
               {/* Meal Type Selection */}

@@ -98,8 +98,8 @@ async function callGeminiRest(
     parts = params.contents.parts.map((p: any) => {
       if (p.inlineData) {
         return {
-          inline_data: {
-            mime_type: p.inlineData.mimeType,
+          inlineData: {
+            mimeType: p.inlineData.mimeType,
             data: p.inlineData.data,
           },
         };
@@ -125,7 +125,7 @@ async function callGeminiRest(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 22000);
+  const timer = setTimeout(() => controller.abort(), 8000);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -145,7 +145,7 @@ async function callGeminiRest(
   return { text };
 }
 
-// Helper universal com modelos Gemini modernos (preferencialmente gemini-3.8-flash) e fallback automático
+// Helper universal com modelos Gemini modernos (gemini-2.0-flash / gemini-1.5-flash) com fallback
 async function callGemini(params: {
   contents: any;
   systemInstruction?: string;
@@ -153,14 +153,11 @@ async function callGemini(params: {
   responseSchema?: any;
   temperature?: number;
 }) {
-  // Lista de modelos atualizados com suporte a visão multimodal (removido modelo obsoleto gemini-1.5-pro)
+  // Modelos oficiais com suporte de visão multimodal disponíveis na v1beta
   const candidateModels = [
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-2.5-pro',
+    'gemini-2.0-flash-lite',
   ];
 
   let lastError: any = null;

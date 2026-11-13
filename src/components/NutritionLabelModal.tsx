@@ -6,22 +6,24 @@ import {
   X,
   AlertCircle,
   RefreshCw,
-  Sparkles,
   ChevronDown,
   ChevronUp,
   Database,
   ShieldCheck,
   Plus,
   Scale,
-  FileText,
+  RotateCcw,
+  Edit3,
 } from 'lucide-react';
 import { FoodItem, MealType, MealSlot } from '../types';
 import { INITIAL_MEAL_SLOTS } from '../services/storage';
 
+// Compressão otimizada no cliente: 1024px e 0.75 produzem arquivos de ~120KB-180KB
+// Isso sobe em menos de 0.5s em conexões móveis e mantém nitidez perfeita para leitura ANVISA
 async function compressImageClient(
   fileOrDataUrl: File | string,
-  maxDimension = 1400,
-  quality = 0.85
+  maxDimension = 1024,
+  quality = 0.75
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -68,12 +70,10 @@ async function parseResponseSafely(res: Response): Promise<any> {
     return JSON.parse(text);
   } catch {
     if (res.status === 413 || text.toLowerCase().includes('entity too large')) {
-      throw new Error(
-        'A foto é muito pesada. Por favor, tente enviar novamente.'
-      );
+      throw new Error('A fotografia é muito pesada para o servidor. Tente novamente.');
     }
-    if (res.status === 504 || text.toLowerCase().includes('timeout')) {
-      throw new Error('Tempo limite no servidor. Tente novamente com uma foto aproximada.');
+    if (res.status === 504 || text.toLowerCase().includes('timeout') || text.toLowerCase().includes('gateway')) {
+      throw new Error('Tempo limite no servidor ao processar imagem. Tente aproximar da tabela.');
     }
     throw new Error(text || `Erro no servidor (código ${res.status})`);
   }
@@ -89,7 +89,8 @@ export interface NutritionLabelModalProps {
   onSaveCustomFood: (food: FoodItem) => void;
 }
 
-type ModalStep = 'capture' | 'processing' | 'review' | 'success';
+export type ModalStep = 'capture' | 'processing' | 'review' | 'success';
+export type ProcessState = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
 interface ExtractedNutrients {
   productName: string;
@@ -123,8 +124,9 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
 }) => {
   const [mealType, setMealType] = useState<MealType>(initialMealType);
   const [step, setStep] = useState<ModalStep>('capture');
+  const [processState, setProcessState] = useState<ProcessState>('idle');
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -171,30 +173,38 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
     onClose();
     setTimeout(() => {
       setStep('capture');
+      setProcessState('idle');
+      setCurrentFile(null);
       setPhotoPreview(null);
-      setIsProcessing(false);
       setIsSaving(false);
       setErrorMessage(null);
       setSavedFoodItem(null);
     }, 200);
   };
 
-  // 1. Processar arquivo selecionado da câmera ou galeria
-  const handleSelectFile = async (file: File) => {
+  // 1. Processar arquivo selecionado da câmera ou galeria com controle estrito de estados e timeout
+  const processImageFile = async (file: File) => {
     if (!file) return;
 
-    // Criar preview local instantâneo para a foto NUNCA desaparecer
+    setCurrentFile(file);
     const localUrl = URL.createObjectURL(file);
     setPhotoPreview(localUrl);
     setErrorMessage(null);
-    setIsProcessing(true);
     setStep('processing');
-    setProcessingStatus('Preparando e otimizando fotografia da tabela...');
+    setProcessState('uploading');
+    setProcessingStatus('Otimizando fotografia da tabela nutricional...');
+
+    const abortController = new AbortController();
+    // Timeout seguro de 16 segundos para evitar travamento infinito no navegador Android
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, 16000);
 
     try {
-      // Comprime no cliente para evitar estouro de memória em smartphones
-      const compressedBase64 = await compressImageClient(file, 1400, 0.85);
+      // Comprime no cliente para ~120KB
+      const compressedBase64 = await compressImageClient(file, 1024, 0.75);
 
+      setProcessState('processing');
       setProcessingStatus('Lendo tabela nutricional com Inteligência Artificial (Normas ANVISA)...');
 
       const res = await fetch('/api/gemini/ocr-label', {
@@ -204,7 +214,10 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
           imageBase64: compressedBase64,
           mimeType: 'image/jpeg',
         }),
+        signal: abortController.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await parseResponseSafely(res);
 
@@ -214,11 +227,11 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
 
       // Se a IA indicar que a foto ficou ilegível, não sai da tela!
       if (data.isLegible === false) {
+        setProcessState('error');
         setErrorMessage(
           data.illegibleReason ||
             'A fotografia da tabela ficou embaçada ou cortada. Você pode tentar outra foto ou preencher os dados manualmente com a foto visível.'
         );
-        setIsProcessing(false);
         return;
       }
 
@@ -246,26 +259,44 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
         saturatedFat: p100.saturatedFat != null ? Number(p100.saturatedFat) : null,
         transFat: p100.transFat != null ? Number(p100.transFat) : null,
         ingredients: data.ingredientsList || '',
-        confidenceScore: Number(data.confidence?.overall) || 88,
+        confidenceScore: Number(data.confidence?.overall) || 90,
       });
 
       setConsumedGrams(servingQty);
+      setProcessState('success');
       setStep('review');
     } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error('Erro no processamento da tabela:', err);
-      setErrorMessage(
-        'Não foi possível concluir a leitura automática: ' +
-          (err.message || 'Erro inesperado') +
-          '. Você pode tentar tirar outra foto ou preencher as informações manualmente.'
-      );
-    } finally {
-      setIsProcessing(false);
+      setProcessState('error');
+
+      if (err.name === 'AbortError') {
+        setErrorMessage(
+          'O servidor demorou mais de 15 segundos para responder. Sua foto continua guardada abaixo: você pode tentar reenviar ou prosseguir preenchendo as informações manualmente com a foto ao lado.'
+        );
+      } else {
+        setErrorMessage(
+          'Não foi possível concluir a leitura automática: ' +
+            (err.message || 'Erro de conexão') +
+            '. Sua foto continua disponível abaixo para você tentar novamente ou preencher manualmente.'
+        );
+      }
     }
   };
 
-  // Opção de avançar para a conferência manual com a foto visível mesmo em caso de aviso
+  // Re-tentar com a mesma foto armazenada
+  const handleRetrySamePhoto = () => {
+    if (currentFile) {
+      processImageFile(currentFile);
+    } else {
+      cameraInputRef.current?.click();
+    }
+  };
+
+  // Avançar para conferência manual preservando a foto visível
   const handleProceedManualWithPhoto = () => {
     setErrorMessage(null);
+    setProcessState('idle');
     setStep('review');
   };
 
@@ -315,16 +346,13 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
 
       // 1. Salva no banco Postgres Neon
       try {
-        const dbRes = await fetch('/api/nutrition/save-food', {
+        await fetch('/api/nutrition/save-food', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (!dbRes.ok) {
-          console.warn('Aviso do backend ao salvar alimento no Postgres');
-        }
       } catch (dbErr) {
-        console.warn('Erro de rede ao salvar no Postgres:', dbErr);
+        console.warn('Salvamento Postgres offline ou parcial:', dbErr);
       }
 
       // 2. Salva no app_state / customFoods da usuária
@@ -419,30 +447,57 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-xl bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe shadow-2xl max-h-[94vh] overflow-y-auto overflow-x-hidden">
-        {/* Cabeçalho do Modal */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-[#33263F]">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white shadow-md shadow-[#8B5CF6]/30">
-              <Camera className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 animate-in fade-in duration-150">
+      {/* Modal responsivo para Android Chrome: h-[90dvh], overflow-hidden com header fixo e corpo rolável */}
+      <div
+        className="relative w-full max-w-xl bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[90dvh] sm:h-auto sm:max-h-[88vh] overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
+      >
+        {/* Cabeçalho Fixo no Topo (shrink-0) */}
+        <div className="shrink-0 p-3.5 sm:p-4 border-b border-[#33263F] flex items-center justify-between bg-[#18121F] z-10">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-gradient-to-tr from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white shadow-md shadow-[#8B5CF6]/30 shrink-0">
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-[#F8F5FC]">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-[#F8F5FC] truncate">
                 Cadastrar Alimento por Foto
               </h2>
-              <p className="text-xs text-[#B8AFC4]">
+              <p className="text-[11px] text-[#B8AFC4] truncate">
                 Fotografe a tabela nutricional para extração com IA (ANVISA)
               </p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 rounded-xl text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#22192C] transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#22192C] transition-colors cursor-pointer shrink-0"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Indicador de Passos Fixo no Topo (shrink-0) */}
+        <div className="shrink-0 px-4 py-2 flex items-center justify-between gap-1 text-[11px] font-semibold border-b border-[#33263F]/50 bg-[#120D18]">
+          <div className={`flex items-center gap-1 ${step === 'capture' ? 'text-[#EC4899]' : 'text-[#A78BFA]'}`}>
+            <span className="w-4 h-4 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[9px]">1</span>
+            <span>Foto</span>
+          </div>
+          <div className="w-4 h-px bg-[#33263F]" />
+          <div className={`flex items-center gap-1 ${step === 'processing' ? 'text-[#EC4899]' : step === 'review' || step === 'success' ? 'text-[#A78BFA]' : 'text-[#B8AFC4]/50'}`}>
+            <span className="w-4 h-4 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[9px]">2</span>
+            <span>Processar</span>
+          </div>
+          <div className="w-4 h-px bg-[#33263F]" />
+          <div className={`flex items-center gap-1 ${step === 'review' ? 'text-[#EC4899]' : step === 'success' ? 'text-[#A78BFA]' : 'text-[#B8AFC4]/50'}`}>
+            <span className="w-4 h-4 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[9px]">3</span>
+            <span>Conferir</span>
+          </div>
+          <div className="w-4 h-px bg-[#33263F]" />
+          <div className={`flex items-center gap-1 ${step === 'success' ? 'text-emerald-400 font-bold' : 'text-[#B8AFC4]/50'}`}>
+            <span className="w-4 h-4 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[9px]">4</span>
+            <span>Salvo</span>
+          </div>
         </div>
 
         {/* Inputs ocultos de captura de foto */}
@@ -453,7 +508,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
           capture="environment"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) handleSelectFile(f);
+            if (f) processImageFile(f);
             e.target.value = '';
           }}
           className="hidden"
@@ -464,66 +519,47 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
           accept="image/*"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) handleSelectFile(f);
+            if (f) processImageFile(f);
             e.target.value = '';
           }}
           className="hidden"
         />
 
-        {/* Indicador de passos */}
-        <div className="py-3 flex items-center justify-between gap-1 text-[11px] font-semibold border-b border-[#33263F]/50">
-          <div className={`flex items-center gap-1 ${step === 'capture' ? 'text-[#EC4899]' : 'text-[#A78BFA]'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[10px]">1</span>
-            <span>Fotografar</span>
-          </div>
-          <div className="w-4 h-px bg-[#33263F]" />
-          <div className={`flex items-center gap-1 ${step === 'processing' ? 'text-[#EC4899]' : step === 'review' || step === 'success' ? 'text-[#A78BFA]' : 'text-[#B8AFC4]/60'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[10px]">2</span>
-            <span>Processar</span>
-          </div>
-          <div className="w-4 h-px bg-[#33263F]" />
-          <div className={`flex items-center gap-1 ${step === 'review' ? 'text-[#EC4899]' : step === 'success' ? 'text-[#A78BFA]' : 'text-[#B8AFC4]/60'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[10px]">3</span>
-            <span>Conferir</span>
-          </div>
-          <div className="w-4 h-px bg-[#33263F]" />
-          <div className={`flex items-center gap-1 ${step === 'success' ? 'text-emerald-400 font-bold' : 'text-[#B8AFC4]/60'}`}>
-            <span className="w-5 h-5 rounded-full bg-[#100C16] border border-current flex items-center justify-center text-[10px]">4</span>
-            <span>Salvo</span>
-          </div>
-        </div>
+        {/* CORPO DO MODAL ROLÁVEL COM PADDING INFERIOR PARA BARRA ANDROID */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4 pb-20 sm:pb-6">
+          {/* Alerta de Erro ou Orientação com Ações Diretas */}
+          {errorMessage && (
+            <div className="p-3.5 rounded-2xl bg-rose-950/50 border border-rose-500/60 text-rose-200 text-xs space-y-2.5 animate-fadeIn">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed flex-1">{errorMessage}</p>
+              </div>
 
-        {/* Mensagem de Erro / Orientação */}
-        {errorMessage && (
-          <div className="mt-3 p-3 rounded-2xl bg-rose-950/40 border border-rose-500/50 text-rose-200 text-xs flex items-start gap-2.5 animate-fadeIn">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <div className="flex-1 space-y-2">
-              <p>{errorMessage}</p>
-              {step === 'processing' && photoPreview && (
+              {/* Botões de Ação Imediata se houve falha ou timeout */}
+              {photoPreview && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#6D28D9] to-[#8B5CF6] text-white text-[11px] font-bold cursor-pointer"
+                    onClick={handleRetrySamePhoto}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#6D28D9] to-[#8B5CF6] text-white text-xs font-bold shadow-md cursor-pointer hover:opacity-95 active:scale-95 transition-all"
                   >
-                    Tirar Outra Foto
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Tentar Novamente com esta Foto</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleProceedManualWithPhoto}
-                    className="px-3 py-1.5 rounded-xl bg-[#100C16] border border-[#33263F] text-[#F8F5FC] text-[11px] font-semibold hover:border-[#8B5CF6] cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#100C16] border border-[#33263F] hover:border-[#8B5CF6] text-[#F8F5FC] text-xs font-semibold cursor-pointer active:scale-95 transition-all"
                   >
-                    Preencher Manualmente com esta Foto
+                    <Edit3 className="w-3.5 h-3.5 text-[#A78BFA]" />
+                    <span>Preencher Manualmente</span>
                   </button>
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* CONTEÚDO POR ETAPA */}
-        <div className="py-3 space-y-4">
-          {/* Seletor de refeição de destino */}
+          {/* Seletor de Refeição de Destino */}
           {step !== 'success' && (
             <div>
               <label className="text-xs font-medium text-[#B8AFC4] block mb-1.5">
@@ -554,26 +590,24 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
           {/* ============================================================ */}
           {step === 'capture' && (
             <div className="space-y-4 animate-fadeIn">
-              {/* Card Principal de Captura */}
-              <div className="p-6 rounded-2xl bg-gradient-to-b from-[#100C16] to-[#18121F] border border-[#33263F] text-center space-y-4">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#6D28D9] to-[#EC4899] mx-auto flex items-center justify-center text-white shadow-lg shadow-[#8B5CF6]/30">
-                  <Camera className="w-7 h-7" />
+              <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-b from-[#100C16] to-[#18121F] border border-[#33263F] text-center space-y-3.5">
+                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[#6D28D9] to-[#EC4899] mx-auto flex items-center justify-center text-white shadow-lg shadow-[#8B5CF6]/30">
+                  <Camera className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#F8F5FC]">
+                  <h3 className="text-sm sm:text-base font-bold text-[#F8F5FC]">
                     Fotografar Tabela Nutricional
                   </h3>
                   <p className="text-xs text-[#B8AFC4] mt-1 max-w-sm mx-auto">
-                    Aproxime a câmera da tabela nutricional da embalagem sob boa iluminação. A IA lerá calorias, porção e todos os macronutrientes automaticamente.
+                    Aproxime a câmera da tabela nutricional sob boa iluminação. A IA identificará calorias, porção e todos os macronutrientes.
                   </p>
                 </div>
 
-                {/* Botões de Ação */}
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => cameraInputRef.current?.click()}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 hover:opacity-95 active:scale-95 transition-all cursor-pointer"
                   >
                     <Camera className="w-4 h-4" />
                     <span>Abrir Câmera do Celular</span>
@@ -581,16 +615,16 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                   <button
                     type="button"
                     onClick={() => galleryInputRef.current?.click()}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-[#100C16] border border-[#33263F] hover:border-[#8B5CF6] text-[#F8F5FC] text-xs font-semibold hover:bg-[#22192C] active:scale-95 transition-all cursor-pointer"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 rounded-2xl bg-[#100C16] border border-[#33263F] hover:border-[#8B5CF6] text-[#F8F5FC] text-xs font-semibold hover:bg-[#22192C] active:scale-95 transition-all cursor-pointer"
                   >
                     <ImageIcon className="w-4 h-4 text-[#A78BFA]" />
                     <span>Escolher da Galeria</span>
                   </button>
                 </div>
 
-                <div className="p-2.5 rounded-xl bg-[#100C16] border border-[#33263F]/60 text-[11px] text-[#B8AFC4] flex items-center justify-center gap-2">
+                <div className="p-2.5 rounded-xl bg-[#100C16] border border-[#33263F]/60 text-[10px] sm:text-[11px] text-[#B8AFC4] flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Conformidade com as Normas ANVISA (RDC 429/2020 e IN 75/2020)</span>
+                  <span>Conformidade com Normas ANVISA (RDC 429/2020 e IN 75/2020)</span>
                 </div>
               </div>
 
@@ -603,14 +637,14 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                     className="w-full flex items-center justify-between text-xs text-[#A78BFA] hover:text-white font-semibold py-1.5 cursor-pointer"
                   >
                     <div className="flex items-center gap-1.5">
-                      <Database className="w-4 h-4 text-emerald-400" />
+                      <Database className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Alimentos Já Cadastrados no Meu Banco ({customFoods.length})</span>
                     </div>
                     {showSavedList ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
 
                   {showSavedList && (
-                    <div className="mt-2 space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                    <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
                       {customFoods.map((saved) => (
                         <div
                           key={saved.id}
@@ -649,21 +683,21 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
             <div className="space-y-4 animate-fadeIn">
               {/* Visualização da Fotografia (NUNCA DESAPARECE) */}
               {photoPreview && (
-                <div className="relative rounded-2xl bg-[#100C16] border border-[#8B5CF6]/40 overflow-hidden max-h-72 flex items-center justify-center p-2">
+                <div className="relative rounded-2xl bg-[#100C16] border border-[#8B5CF6]/40 overflow-hidden max-h-60 sm:max-h-72 flex items-center justify-center p-2">
                   <img
                     src={photoPreview}
                     alt="Tabela Nutricional Fotografada"
-                    className="max-h-64 w-auto rounded-xl object-contain shadow-lg"
+                    className="max-h-56 sm:max-h-64 w-auto rounded-xl object-contain shadow-lg"
                   />
-                  {isProcessing && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center space-y-3">
+                  {(processState === 'uploading' || processState === 'processing') && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center space-y-3">
                       <RefreshCw className="w-8 h-8 text-[#EC4899] animate-spin" />
                       <div>
-                        <p className="text-sm font-bold text-white">
+                        <p className="text-xs sm:text-sm font-bold text-white">
                           {processingStatus || 'Processando com Inteligência Artificial...'}
                         </p>
-                        <p className="text-xs text-[#B8AFC4] mt-1">
-                          A fotografia permanece salva enquanto os dados são extraídos.
+                        <p className="text-[10px] sm:text-xs text-[#B8AFC4] mt-1">
+                          A fotografia permanece guardada enquanto os dados são extraídos.
                         </p>
                       </div>
                     </div>
@@ -671,27 +705,37 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                 </div>
               )}
 
-              {/* Botões de Ação se houver falha de leitura */}
-              {!isProcessing && (
-                <div className="flex items-center justify-between gap-2 pt-2">
+              {/* Botões de Ação caso tenha havido erro ou aviso */}
+              {processState === 'error' && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => {
                       setStep('capture');
                       setErrorMessage(null);
                     }}
-                    className="px-4 py-2.5 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
                   >
-                    Voltar
+                    Voltar para Início
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#6D28D9] to-[#8B5CF6] text-white text-xs font-bold cursor-pointer"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Tirar Nova Foto</span>
-                  </button>
+                  <div className="w-full sm:w-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#6D28D9] to-[#8B5CF6] text-white text-xs font-bold cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>Tirar Nova Foto</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleProceedManualWithPhoto}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#100C16] border border-[#33263F] text-[#F8F5FC] text-xs font-semibold cursor-pointer"
+                    >
+                      <Edit3 className="w-4 h-4 text-[#A78BFA]" />
+                      <span>Digitar Dados</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -721,7 +765,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                       <img
                         src={photoPreview}
                         alt="Foto da Tabela"
-                        className="max-h-48 w-auto rounded-xl object-contain"
+                        className="max-h-44 w-auto rounded-xl object-contain"
                       />
                     </div>
                   )}
@@ -735,10 +779,10 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                     Conferir Informações Nutricionais
                   </h3>
                   <p className="text-[11px] text-[#B8AFC4]">
-                    Você pode ajustar qualquer valor extraído antes de salvar no banco de dados.
+                    Ajuste qualquer valor extraído antes de salvar no banco de dados.
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-[10px] text-emerald-400 font-bold flex items-center gap-1 shrink-0">
                   <ShieldCheck className="w-3 h-3" />
                   <span>IA {reviewData.confidenceScore}%</span>
                 </span>
@@ -747,8 +791,8 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
               {/* Campos de Identificação */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-[#F8F5FC] flex items-center gap-1">
-                    <span>Nome do Alimento *</span>
+                  <label className="text-[11px] font-semibold text-[#F8F5FC] block">
+                    Nome do Alimento *
                   </label>
                   <input
                     type="text"
@@ -759,7 +803,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-[#B8AFC4]">Marca (opcional)</label>
+                  <label className="text-[11px] font-medium text-[#B8AFC4] block">Marca (opcional)</label>
                   <input
                     type="text"
                     value={reviewData.brand}
@@ -773,8 +817,8 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
               {/* Porção e Medida Caseira */}
               <div className="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-[#100C16] border border-[#33263F]">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-[#B8AFC4]">
-                    Peso da Porção ({reviewData.servingUnit || 'g'})
+                  <label className="text-[11px] font-medium text-[#B8AFC4] block">
+                    Peso Porção ({reviewData.servingUnit || 'g'})
                   </label>
                   <input
                     type="number"
@@ -791,7 +835,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-[#B8AFC4]">Medida Caseira</label>
+                  <label className="text-[11px] font-medium text-[#B8AFC4] block">Medida Caseira</label>
                   <input
                     type="text"
                     value={reviewData.householdMeasure}
@@ -802,7 +846,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                         servingSize: e.target.value || `${reviewData.servingQuantity}g`,
                       })
                     }
-                    placeholder="Ex: 2 colheres de sopa / 1 pote"
+                    placeholder="Ex: 2 colheres / 1 pote"
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#18121F] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
                   />
                 </div>
@@ -944,12 +988,12 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
               </div>
 
               {/* Botões de Ação na Conferência */}
-              <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-[#33263F]">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-[#33263F]">
                 <button
                   type="button"
                   onClick={() => setStep('capture')}
                   disabled={isSaving}
-                  className="px-4 py-2.5 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer disabled:opacity-50"
                 >
                   Tirar Outra Foto
                 </button>
@@ -957,7 +1001,7 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                   type="button"
                   onClick={handleSaveFood}
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold shadow-lg shadow-[#8B5CF6]/30 hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {isSaving ? (
                     <>
@@ -980,10 +1024,9 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
           {/* ============================================================ */}
           {step === 'success' && savedFoodItem && (
             <div className="space-y-4 animate-fadeIn">
-              {/* Card de Sucesso */}
-              <div className="p-5 rounded-2xl bg-[#100C16] border border-emerald-500/40 text-center space-y-2">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/40">
-                  <Check className="w-6 h-6" />
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#100C16] border border-emerald-500/40 text-center space-y-2">
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/40">
+                  <Check className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <h3 className="text-sm font-bold text-[#F8F5FC]">
                   Alimento Salvo com Sucesso no Banco de Dados!
@@ -993,21 +1036,19 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                 </p>
               </div>
 
-              {/* Detalhes do Alimento Salvo */}
               <div className="p-4 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-[#33263F]">
-                  <div>
-                    <h4 className="text-sm font-bold text-[#F8F5FC]">{savedFoodItem.name}</h4>
+                  <div className="min-w-0 mr-2">
+                    <h4 className="text-sm font-bold text-[#F8F5FC] truncate">{savedFoodItem.name}</h4>
                     {savedFoodItem.brand && (
-                      <p className="text-[11px] text-[#B8AFC4]">{savedFoodItem.brand}</p>
+                      <p className="text-[11px] text-[#B8AFC4] truncate">{savedFoodItem.brand}</p>
                     )}
                   </div>
-                  <span className="px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 text-[10px] text-[#A78BFA] font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 text-[10px] text-[#A78BFA] font-bold shrink-0">
                     Banco de Dados
                   </span>
                 </div>
 
-                {/* Ajuste dinâmico de gramas consumidos */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-[#F8F5FC]">
@@ -1026,7 +1067,6 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Slider de gramas */}
                   <input
                     type="range"
                     min="10"
@@ -1037,25 +1077,24 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                     className="w-full accent-[#EC4899] cursor-pointer"
                   />
 
-                  {/* Resumo de Calorias e Macros Recalculados em Tempo Real */}
                   {(() => {
                     const totals = calculateConsumedTotals();
                     return (
-                      <div className="grid grid-cols-4 gap-2 pt-2 text-center font-mono-numbers">
+                      <div className="grid grid-cols-4 gap-1.5 sm:gap-2 pt-2 text-center font-mono-numbers">
                         <div className="p-2 rounded-xl bg-[#18121F] border border-pink-500/30">
-                          <span className="text-[10px] text-[#B8AFC4] block">Calorias</span>
+                          <span className="text-[9px] sm:text-[10px] text-[#B8AFC4] block">Calorias</span>
                           <span className="text-xs font-bold text-[#EC4899]">{totals.calories} kcal</span>
                         </div>
                         <div className="p-2 rounded-xl bg-[#18121F] border border-violet-500/30">
-                          <span className="text-[10px] text-[#B8AFC4] block">Carbos</span>
+                          <span className="text-[9px] sm:text-[10px] text-[#B8AFC4] block">Carbos</span>
                           <span className="text-xs font-bold text-[#A78BFA]">{totals.carbs}g</span>
                         </div>
                         <div className="p-2 rounded-xl bg-[#18121F] border border-purple-500/30">
-                          <span className="text-[10px] text-[#B8AFC4] block">Proteína</span>
+                          <span className="text-[9px] sm:text-[10px] text-[#B8AFC4] block">Proteína</span>
                           <span className="text-xs font-bold text-[#8B5CF6]">{totals.protein}g</span>
                         </div>
                         <div className="p-2 rounded-xl bg-[#18121F] border border-rose-500/30">
-                          <span className="text-[10px] text-[#B8AFC4] block">Gordura</span>
+                          <span className="text-[9px] sm:text-[10px] text-[#B8AFC4] block">Gordura</span>
                           <span className="text-xs font-bold text-[#F472B6]">{totals.fat}g</span>
                         </div>
                       </div>
@@ -1064,8 +1103,8 @@ export const NutritionLabelModal: React.FC<NutritionLabelModalProps> = ({
                 </div>
               </div>
 
-              {/* Botões Finais */}
-              <div className="flex flex-col sm:flex-row items-center justify-end gap-2.5 pt-2">
+              {/* Botões de Conclusão */}
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={handleClose}

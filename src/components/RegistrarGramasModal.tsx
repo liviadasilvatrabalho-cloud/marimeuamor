@@ -159,10 +159,13 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="relative w-full max-w-lg bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 pb-safe shadow-2xl max-h-[92vh] overflow-y-auto overflow-x-hidden space-y-3.5 sm:space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#33263F]">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4">
+      <div
+        className="relative w-full max-w-lg bg-[#18121F] border-t sm:border border-[#33263F] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col h-[90dvh] sm:h-auto sm:max-h-[88vh] overflow-hidden"
+        style={{ maxHeight: 'calc(100dvh - 1.5rem)' }}
+      >
+        {/* Header Fixo */}
+        <div className="shrink-0 p-3.5 sm:p-4 border-b border-[#33263F] flex items-center justify-between bg-[#18121F]">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-2xl bg-gradient-to-tr from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white shadow-md shadow-[#8B5CF6]/30 shrink-0">
               <Scale className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -183,6 +186,9 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Modal Body Rolável com padding para barra de navegação Android */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3.5 sm:space-y-4 pb-20 sm:pb-6">
 
         {/* Meal Selector */}
         <div className="space-y-1">
@@ -484,6 +490,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
               : `Adicionar ${currentFoodDisplayName} (${parsedGrams}g · ${activeTab === 'tabela' ? calculatedNutrition.calories : (directCalories || 0)} kcal)`}
           </span>
         </button>
+        </div>
       </div>
     </div>
   );
