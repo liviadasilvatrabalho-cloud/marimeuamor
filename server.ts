@@ -62,6 +62,10 @@ const ai = new GoogleGenAI({
     headers: {
       'User-Agent': 'aistudio-build',
     },
+    // Sem retry interno (o padrão são 5 tentativas com backoff, o que estoura
+    // o maxDuration de 60s do Vercel) e teto de 18s por tentativa.
+    retryOptions: { attempts: 1 },
+    timeout: 18000,
   },
 });
 
@@ -75,7 +79,7 @@ async function callGemini(params: {
   const candidateModels = [
     'gemini-flash-latest',
     'gemini-3.8-flash',
-    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
   ];
 
   let lastError: any = null;
