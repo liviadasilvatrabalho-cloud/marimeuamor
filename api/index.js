@@ -3081,9 +3081,11 @@ var ai = new GoogleGenAI({
 });
 async function callGemini(params) {
   const candidateModels = [
-    "gemini-flash-latest",
-    "gemini-3.8-flash",
-    "gemini-3.1-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-pro"
   ];
   let lastError = null;
   for (const model of candidateModels) {
@@ -3101,7 +3103,24 @@ async function callGemini(params) {
       return response;
     } catch (err) {
       lastError = err;
-      console.warn(`Tentativa com modelo ${model} n\xE3o respondeu:`, err?.message || err);
+      console.warn(`Tentativa com modelo ${model} falhou:`, err?.message || err);
+      if (params.responseSchema) {
+        try {
+          const configNoSchema = {};
+          if (params.systemInstruction) configNoSchema.systemInstruction = params.systemInstruction;
+          if (params.responseMimeType) configNoSchema.responseMimeType = params.responseMimeType;
+          if (params.temperature !== void 0) configNoSchema.temperature = params.temperature;
+          const retryResponse = await ai.models.generateContent({
+            model,
+            contents: params.contents,
+            config: Object.keys(configNoSchema).length > 0 ? configNoSchema : void 0
+          });
+          return retryResponse;
+        } catch (retryErr) {
+          lastError = retryErr;
+          console.warn(`Tentativa sem schema no modelo ${model} tamb\xE9m falhou:`, retryErr?.message || retryErr);
+        }
+      }
     }
   }
   throw lastError;
@@ -3343,62 +3362,69 @@ app.post("/api/gemini/analyze-meal", async (req, res) => {
     }
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, "");
     const promptText = `
-Voc\xEA \xE9 uma nutricionista cl\xEDnica especializada na Tabela TACO (Tabela Brasileira de Composi\xE7\xE3o de Alimentos) e TBCA da USP.
+Voc\xEA \xE9 uma nutricionista cl\xEDnica de excel\xEAncia especializada na Tabela TACO (Tabela Brasileira de Composi\xE7\xE3o de Alimentos) e TBCA da USP.
 Analise detalhadamente a refei\xE7\xE3o na fotografia enviada por Mariana.
 Refei\xE7\xE3o pretendida: ${mealType || "Refei\xE7\xE3o"}.
 Notas adicionais da usu\xE1ria: ${notes || "Nenhuma"}.
 
-M\xC9TODO OBRIGAT\xD3RIO (nesta ordem):
-1. Identifique todos os alimentos vis\xEDveis separadamente (ex: separar arroz, feij\xE3o, frango grelhado, salada, azeite).
-2. ESCALA VISUAL \u2014 use refer\xEAncias da pr\xF3pria cena como r\xE9gua para medir:
+DIRETRIZ FUNDAMENTAL DE IDENTIFICA\xC7\xC3O (PRATO DE COMIDA vs. LANCHE / ITEM \xDANICO):
+A) SE FOR UM PRATO DE COMIDA COMPOSTO (ex: almo\xE7o, jantar ou marmita com arroz, feij\xE3o, carnes, legumes, salada):
+   - Separe e estime CADA ALIMENTO INDIVIDUALMENTE em itens separados na lista "items" (ex: "Arroz branco cozido", "Feij\xE3o carioca cozido", "Peito de frango grelhado", "Salada mista", etc.).
+   - Estime com m\xE1xima precis\xE3o o peso em gramas de cada elemento individual no prato.
+B) SE FOR UM LANCHE, SANDU\xCDCHE, SALGADO, PIZZA, PASTEL, A\xC7A\xCD OU ITEM \xDANICO (ex: hamb\xFArguer, sandu\xEDche natural, misto-quente, tapioca recheada, coxinha, fatia de pizza, fatia de bolo, p\xE3o de queijo recheado):
+   - NUNCA separe o lanche em fatias soltas de p\xE3o e queijo! Estime as calorias e macronutrientes do lanche JUNTAS em 1 item principal coeso (ex: "Hamb\xFArguer artesanal completo com queijo e bacon" ou "Sandu\xEDche natural de frango", "Coxinha de frango", "Fatia de pizza calabresa").
+   - Estime o peso total do lanche e seus macronutrientes de forma precisa e certeira com base na composi\xE7\xE3o real de lanches brasileiros.
+   - S\xF3 inclua itens adicionais se houver acompanhamentos ou bebidas vis\xEDveis ao lado (ex: "Por\xE7\xE3o de batata frita", "Suco de laranja natural").
+
+M\xC9TODO OBRIGAT\xD3RIO DE C\xC1LCULO E PRECIS\xC3O:
+1. ESCALA VISUAL \u2014 use refer\xEAncias da pr\xF3pria cena como r\xE9gua para medir:
    - Prato de almo\xE7o comum \u2248 24 cm de di\xE2metro; potes/marmitas: me\xE7a pela borda vis\xEDvel
    - Garfo \u2248 18 cm, faca \u2248 20 cm, colher de sopa \u2248 14 cm
    - Concha cheia de arroz/feij\xE3o \u2248 100-120 g; rasa \u2248 60-80 g
    - Palmo de carne grelhada \u2248 100 g; fil\xE9 de peito de frango \u2248 100-180 g
    - Ovo inteiro \u2248 55 g; fatia de p\xE3o franc\xEAs \u2248 30 g; fatia de queijo \u2248 25 g
+   - Hamb\xFArguer completo m\xE9dio \u2248 200-280 g; sandu\xEDche natural \u2248 180-220 g; coxinha m\xE9dia \u2248 120 g
    - Banana prata inteira \u2248 100 g; punhado de batata frita \u2248 100 g; fatia de bolo \u2248 80-120 g
-   Compare cada alimento com essas refer\xEAncias e estime os gramas. NUNCA invente n\xFAmeros mirabolantes; seja realista e prudente.
-3. Determine o estado de preparo exato (cru, cozido em \xE1gua, grelhado, assado, frito, refogado com \xF3leo/azeite, no vapor) \u2014 ele muda os valores por 100 g.
-4. \xD3LEO INVIS\xCDVEL: se houver brilho, fritura ou refogado, some 5-15 g de \xF3leo/azeite (\u2248 45-135 kcal) \xE0 por\xE7\xE3o; s\xF3 n\xE3o some se a foto demonstrar claramente que n\xE3o houve gordura no preparo.
-5. Peso l\xEDquido: desconte osso, casca, semente, caro\xE7o e embalagem.
-6. Para cada alimento informe os valores POR 100 g usando a refer\xEAncia TACO abaixo (kcal / prote\xEDna g / carboidrato g / gordura g / fibra g):
+   Compare cada alimento com essas refer\xEAncias e estime os gramas com rigor t\xE9cnico.
+2. Determine o estado de preparo exato (cru, cozido em \xE1gua, grelhado, assado, frito, refogado com \xF3leo/azeite, no vapor) \u2014 ele muda os valores por 100 g.
+3. \xD3LEO INVIS\xCDVEL: se houver brilho, fritura ou refogado, some 5-15 g de \xF3leo/azeite (\u2248 45-135 kcal) \xE0 por\xE7\xE3o; s\xF3 n\xE3o some se a foto demonstrar claramente que n\xE3o houve gordura no preparo.
+4. Peso l\xEDquido: desconte osso, casca, semente, caro\xE7o e embalagem.
+5. Para cada alimento informe os valores POR 100 g usando a refer\xEAncia TACO abaixo (kcal / prote\xEDna g / carboidrato g / gordura g / fibra g):
    arroz branco cozido 128/2.5/28/0.2/1.6 | arroz integral cozido 112/2.6/23/1.0/2.7 | feij\xE3o cozido 76/4.8/14/0.5/8 | macarr\xE3o cozido 147/5/30/1/1.8 | cuscuz 115/3/25/0.5/1.5
    frango peito grelhado 159/32/0/2.5/0 | frango perna/coxa grelhado 205/28/0/9/0 | carne bovina grelhada 220/30/0/10/0 | carne mo\xEDda refogada 160/19/0/8/0 | porco grelhado 240/28/0/14/0
    peixe branco grelhado 130/23/0/4/0 | salm\xE3o grelhado 230/24/0/15/0 | camar\xE3o grelhado 100/20/1/1.5/0 | ovo frito 240/14/1.6/19/0 | ovo cozido 155/13/1.1/11/0
-   batata frita 267/3.5/35/13/3 | batata cozida 52/1.2/12/0/1.3 | batata-doce cozida 77/0.6/18/0.1/2.2 | batata-doce assada 90/2/21/0.1/3.3 | aipim cozido 125/0.6/30/0.3/1.8 | polenta 80/1.5/17/0.5/0.5 | pur\xEA de batata 100/2/17/2.5/1.5
-   p\xE3o franc\xEAs 330/8/60/5/2.4 | p\xE3o de forma 250/8/48/3.5/2.5 | queijo mussarela 300/19/3/25/0 | queijo prato 350/18/1.9/30/0 | requeij\xE3o 260/5/3.5/26/0 | creme de leite 190/2.5/3/20/0 | leite integral 61/3.2/4.7/3.3/0 | iogurte natural 55/4/4.7/1.5/0
-   azeite/\xF3leo/manteiga 884/0/0/100/0 | maionese 300/1/4/32/0 | farofa pronta 500/6/60/26/4
-   br\xF3colis cozido 34/2.8/6/0.4/3.3 | couve refogada 90/3/6/6/4 | cenoura cozida 43/0.8/10/0.2/3.2 | tomate 15/1.1/3.1/0.2/1.2 | milho verde 105/3.4/19/1.5/4 | gr\xE3o-de-bico cozido 150/8/25/2.5/7 | lentilha cozida 105/8/18/0.5/5
-   banana prata 98/1.3/26/0.1/2 | ma\xE7\xE3 56/0.4/15/0.1/1.3 | abacaxi 45/0.9/12/0.1/1.3 | manga 60/0.9/15/0.2/1.6
-   biscoito requeij\xE3o 480/7/66/20/2 | bolo 350/5/50/13/1.5 | chocolate ao leite 550/7/55/33/2 | cereal matinal 370/7/80/1.5/3 | granola 430/10/65/16/6 | aveia em flocos 360/13/60/7/9
-   pizza mussarela 270/11/33/11/2 | hamb\xFArguer 250/17/20/13/1 | bacon 450/30/0/37/0 | lingui\xE7a 300/16/2/26/0 | sardinha enlatada 190/25/0/9/0 | atum em \xF3leo 220/25/0/13/0
-   refrigerante 42/0/11/0/0 | suco de fruta natural 50/0.5/12/0.1/0.3 | cerveja 43/0.5/3.6/0/0
-   Para alimentos fora da tabela, estime valores t\xEDpicos de composi\xE7\xE3o \u2014 seja prudente.
-7. AUTO-VERIFICA\xC7\xC3O OBRIGAT\xD3RIA antes de responder:
-   a) calorias/100g \u2248 (4 \xD7 carboidratos) + (4 \xD7 prote\xEDnas) + (9 \xD7 gorduras) \u2014 se divergir mais de 15%, corrija as calorias ou os macros;
-   b) calorias da por\xE7\xE3o = gramas \xD7 calorias/100g \xF7 100 \u2014 confira a conta de cada item; os totais s\xE3o a soma exata dos itens.
-8. Explique cada estimativa com medida caseira (ex.: "2 conchas cheias \u2248 140g", "meio prato \u2248 120g").
-9. Estime a confian\xE7a geral (0 a 100). Se a foto n\xE3o permitir estimar bem (escuro, cortado, por\xE7\xE3o emberrada), reduza a confian\xE7a e fa\xE7a 1 a 2 perguntas curtas e gentis para a Mariana confirmar.
+   batata frita 267/3.5/35/13/3 | batata cozida 52/1.2/12/0/1.3 | batata-doce cozida 77/0.6/18/0.1/2.2 | batata-doce assada 90/2/21/0.1/3.3 | aipim cozido 125/0.6/30/0.3/1.8 | pur\xEA de batata 100/2/17/2.5/1.5
+   p\xE3o franc\xEAs 330/8/60/5/2.4 | p\xE3o de forma 250/8/48/3.5/2.5 | queijo mussarela 300/19/3/25/0 | requeij\xE3o 260/5/3.5/26/0 | maionese 300/1/4/32/0
+   hamb\xFArguer completo 250/14/22/12/1.5 | sandu\xEDche natural frango 190/11/22/6/1.8 | coxinha frango 260/8/30/12/1.2 | pastel de carne frito 310/9/32/16/1 | pizza mussarela 270/11/33/11/2
+   azeite/\xF3leo/manteiga 884/0/0/100/0 | farofa pronta 500/6/60/26/4
+   br\xF3colis cozido 34/2.8/6/0.4/3.3 | couve refogada 90/3/6/6/4 | cenoura cozida 43/0.8/10/0.2/3.2 | tomate 15/1.1/3.1/0.2/1.2 | salada mista verde 18/1.2/3.5/0.2/1.5
+   banana prata 98/1.3/26/0.1/2 | ma\xE7\xE3 56/0.4/15/0.1/1.3 | bolo simples 350/5/50/13/1.5 | chocolate ao leite 550/7/55/33/2
+   refrigerante 42/0/11/0/0 | suco de fruta natural 50/0.5/12/0.1/0.3 | a\xE7a\xED na tigela montado 130/2/22/4/2.5
+6. AUTO-VERIFICA\xC7\xC3O OBRIGAT\xD3RIA antes de responder:
+   a) calorias/100g \u2248 (4 \xD7 carboidratos) + (4 \xD7 prote\xEDnas) + (9 \xD7 gorduras) \u2014 confira a coer\xEAncia;
+   b) calorias da por\xE7\xE3o = gramas \xD7 calorias/100g \xF7 100 \u2014 confira cada item; os totais s\xE3o a soma exata dos itens.
+7. Explique cada estimativa com medida caseira (ex.: "1 unidade m\xE9dia \u2248 220g", "2 conchas cheias \u2248 140g", "meio prato \u2248 120g").
+8. Estime a confian\xE7a geral (0 a 100). Fa\xE7a 1 a 2 perguntas curtas e gentis para Mariana se houver d\xFAvida (ex: "O lanche tinha molho especial ou maionese?").
 
 Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
 {
-  "mealName": "Nome descritivo da refei\xE7\xE3o (ex: Almo\xE7o com Frango Grelhado, Arroz e Br\xF3colis)",
+  "mealName": "Nome descritivo da refei\xE7\xE3o (ex: Almo\xE7o com Frango Grelhado e Salada OU Hamb\xFArguer Artesanal com Queijo)",
   "overallConfidence": 85,
-  "confidenceNotes": "Explica\xE7\xE3o breve da estimativa visual de volume",
-  "questionsForMariana": ["Voc\xEA usou azeite ou manteiga no preparo do frango?"],
+  "confidenceNotes": "Explica\xE7\xE3o breve da estimativa visual",
+  "questionsForMariana": ["Voc\xEA adicionou molho extra ou azeite no preparo?"],
   "items": [
     {
-      "foodName": "Peito de frango",
+      "foodName": "Peito de frango grelhado OU Hamb\xFArguer Artesanal",
       "prepState": "grelhado",
       "portionGrams": 130,
-      "portionReasoning": "Fatia com ~1,5 palmo de largura \u2248 130g",
+      "portionReasoning": "Por\xE7\xE3o m\xE9dia com base na escala visual \u2248 130g",
       "kcalPer100g": 159,
       "proteinPer100g": 32,
       "carbsPer100g": 0,
       "fatPer100g": 2.5,
       "fiberPer100g": 0,
       "confidence": 90,
-      "reasoning": "Fil\xE9 m\xE9dio de aproximadamente 130g grelhado sem pele",
+      "reasoning": "Estimativa precisa baseada na TACO/TBCA",
       "calories": 207,
       "protein": 41.6,
       "carbs": 0,
@@ -3498,6 +3524,68 @@ Retorne estritamente em formato JSON:
     });
   }
 });
+app.post("/api/gemini/estimate-food-nutrition", async (req, res) => {
+  try {
+    const { foodName, brand, barcode } = req.body;
+    if (!foodName || !foodName.trim()) {
+      return res.status(400).json({ error: "Nome do alimento \xE9 obrigat\xF3rio" });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ error: "Chave do Gemini n\xE3o configurada no servidor" });
+    }
+    const promptText = `
+Voc\xEA \xE9 uma nutricionista e especialista em tabelas de alimentos brasileiras (Tabela TACO, TBCA e rotulagem ANVISA).
+O usu\xE1rio informou o alimento comercial ou caseiro: "${foodName.trim()}" ${brand ? `da marca "${brand.trim()}"` : ""}.
+Estime com o m\xE1ximo de precis\xE3o cient\xEDfica os valores nutricionais por 100g e a por\xE7\xE3o de refer\xEAncia t\xEDpica recomendada pelo fabricante ou ANVISA.
+
+Responda ESTRITAMENTE em formato JSON com o seguinte schema:
+{
+  "productName": "${foodName.trim()}",
+  "brand": "${brand ? brand.trim() : ""}",
+  "servingSize": "ex: 30g ou 100g ou 1 unidade (50g)",
+  "servingGrams": 100,
+  "calories": 150,
+  "protein": 10.0,
+  "carbs": 20.0,
+  "fat": 3.5,
+  "fiber": 2.0,
+  "sodium": 80
+}
+Todos os valores de calorias, protein, carbs, fat, fiber devem ser expressos por 100g (n\xFAmeros puros).
+servingGrams deve ser o peso em gramas da por\xE7\xE3o de refer\xEAncia t\xEDpica (n\xFAmero).
+`;
+    const response = await callGemini({
+      contents: promptText,
+      responseMimeType: "application/json",
+      temperature: 0.2
+    });
+    const parsed = JSON.parse(response.text || "{}");
+    const servingGrams = Number(parsed.servingGrams) || 100;
+    const per100g = {
+      calories: Math.round(Number(parsed.calories) || 0),
+      protein: Number(Number(parsed.protein || 0).toFixed(1)),
+      carbs: Number(Number(parsed.carbs || 0).toFixed(1)),
+      fat: Number(Number(parsed.fat || 0).toFixed(1)),
+      fiber: Number(Number(parsed.fiber || 0).toFixed(1)),
+      sodium: Number(Number(parsed.sodium || 0).toFixed(1))
+    };
+    return res.json({
+      found: true,
+      barcode: barcode || "",
+      productName: parsed.productName || foodName.trim(),
+      brand: parsed.brand || brand || "",
+      servingSize: parsed.servingSize || `${servingGrams}g`,
+      servingGrams,
+      per100g,
+      source: "Estimativa IA (TACO/TBCA)"
+    });
+  } catch (err) {
+    console.error("Erro na estimativa de nutri\xE7\xE3o por IA:", err);
+    return res.status(500).json({
+      error: "Erro ao estimar valores nutricionais do alimento: " + (err.message || "Erro interno")
+    });
+  }
+});
 app.post("/api/gemini/recipe-assistant", async (req, res) => {
   try {
     const { action, ingredients, recipeName, question } = req.body;
@@ -3571,17 +3659,29 @@ app.get("/api/barcode/:code", async (req, res) => {
   try {
     const cleanCode = code.trim();
     const profileId = await resolveStorageProfile(req);
-    if (pool && profileId) {
-      const local = await pool.query(
-        `SELECT p.* FROM products p
-         WHERE p.barcode = $1 AND p.deleted_at IS NULL
-           AND p.kitchen_space_id = ANY(
-             SELECT kitchen_space_id FROM memberships WHERE profile_id = $2
-           )
-         LIMIT 1`,
-        [cleanCode, profileId]
-      );
-      if (local.rows.length) {
+    if (pool) {
+      let local = null;
+      if (profileId) {
+        local = await pool.query(
+          `SELECT p.* FROM products p
+           WHERE p.barcode = $1 AND p.deleted_at IS NULL
+             AND p.kitchen_space_id = ANY(
+               SELECT kitchen_space_id FROM memberships WHERE profile_id = $2
+             )
+           LIMIT 1`,
+          [cleanCode, profileId]
+        );
+      }
+      if (!local || local.rows.length === 0) {
+        local = await pool.query(
+          `SELECT p.* FROM products p
+           WHERE p.barcode = $1 AND p.deleted_at IS NULL
+           ORDER BY p.last_updated_at DESC NULLS LAST
+           LIMIT 1`,
+          [cleanCode]
+        );
+      }
+      if (local && local.rows.length) {
         const p = local.rows[0];
         const servingGrams2 = Number(p.serving_quantity) || 100;
         return res.json({
@@ -3601,7 +3701,7 @@ app.get("/api/barcode/:code", async (req, res) => {
             sodium: Number(p.sodium_per_100) || 0
           },
           imageUrl: p.image_path || null,
-          source: p.data_source,
+          source: p.data_source || "Banco Local",
           product: p
         });
       }
@@ -3678,22 +3778,24 @@ app.post("/api/gemini/read-barcode", async (req, res) => {
     }
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, "");
     const promptText = `
-Voc\xEA \xE9 um leitor \xF3ptico de c\xF3digo de barras (EAN-13, EAN-8, UPC-A, UPC-E).
-Analise a imagem e identifique o n\xFAmero do c\xF3digo de barras presente no produto ou embalagem.
-Retorne estritamente o c\xF3digo num\xE9rico encontrado e o nome aproximado do produto se vis\xEDvel.
+Voc\xEA \xE9 um leitor \xF3ptico especialista em leitura de c\xF3digos de barras (EAN-13, EAN-8, UPC-A, UPC-E, Code 128) em embalagens de alimentos e produtos.
+Procure na fotografia:
+1. As barras pretas verticais do c\xF3digo de barras;
+2. Os d\xEDgitos num\xE9ricos impressos diretamente abaixo ou acima das barras (geralmente uma sequ\xEAncia de 8, 12, 13 ou 14 d\xEDgitos, comum come\xE7ar com 789 no Brasil).
+Retorne SEMPRE apenas d\xEDgitos num\xE9ricos puros no campo "barcode" (remova quaisquer espa\xE7os, tra\xE7os ou letras).
 
 Formato JSON:
 {
   "found": true,
   "barcode": "7891000100103",
-  "productName": "Leite Mo\xE7a",
+  "productName": "Nome do produto se vis\xEDvel",
   "confidence": 95
 }
-Se n\xE3o encontrar nenhum c\xF3digo de barras na foto, retorne:
+Se realmente n\xE3o houver nenhum c\xF3digo de barras ou n\xFAmeros vis\xEDveis na foto, retorne:
 {
   "found": false,
   "barcode": "",
-  "reason": "Nenhum c\xF3digo de barras vis\xEDvel na imagem"
+  "reason": "Nenhum c\xF3digo de barras ou n\xFAmero leg\xEDvel na imagem"
 }
 `;
     const response = await callGemini({

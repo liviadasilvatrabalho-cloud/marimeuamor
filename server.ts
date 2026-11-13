@@ -475,21 +475,6 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
   }
 }
 `;
-      "carbs": 0,
-      "fat": 3.3,
-      "fiber": 0
-    }
-  ],
-  "totals": {
-    "totalGrams": 420,
-    "calories": 485,
-    "protein": 48.2,
-    "carbs": 52.0,
-    "fat": 8.5,
-    "fiber": 7.2
-  }
-}
-`;
 
     const response = await callGemini({
       contents: {
@@ -877,22 +862,24 @@ app.post('/api/gemini/read-barcode', async (req, res) => {
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+]+;base64,/, '');
 
     const promptText = `
-Você é um leitor óptico de código de barras (EAN-13, EAN-8, UPC-A, UPC-E).
-Analise a imagem e identifique o número do código de barras presente no produto ou embalagem.
-Retorne estritamente o código numérico encontrado e o nome aproximado do produto se visível.
+Você é um leitor óptico especialista em leitura de códigos de barras (EAN-13, EAN-8, UPC-A, UPC-E, Code 128) em embalagens de alimentos e produtos.
+Procure na fotografia:
+1. As barras pretas verticais do código de barras;
+2. Os dígitos numéricos impressos diretamente abaixo ou acima das barras (geralmente uma sequência de 8, 12, 13 ou 14 dígitos, comum começar com 789 no Brasil).
+Retorne SEMPRE apenas dígitos numéricos puros no campo "barcode" (remova quaisquer espaços, traços ou letras).
 
 Formato JSON:
 {
   "found": true,
   "barcode": "7891000100103",
-  "productName": "Leite Moça",
+  "productName": "Nome do produto se visível",
   "confidence": 95
 }
-Se não encontrar nenhum código de barras na foto, retorne:
+Se realmente não houver nenhum código de barras ou números visíveis na foto, retorne:
 {
   "found": false,
   "barcode": "",
-  "reason": "Nenhum código de barras visível na imagem"
+  "reason": "Nenhum código de barras ou número legível na imagem"
 }
 `;
 

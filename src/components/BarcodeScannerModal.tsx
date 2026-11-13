@@ -15,6 +15,8 @@ import {
   Bookmark,
   ChevronDown,
   ChevronUp,
+  Zap,
+  ZapOff,
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { FoodItem, MealType, MealSlot } from '../types';
@@ -112,6 +114,10 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   // Saved foods list toggle
   const [showSavedList, setShowSavedList] = useState<boolean>(false);
 
+  // Flashlight / Torch state
+  const [hasTorch, setHasTorch] = useState<boolean>(false);
+  const [isTorchOn, setIsTorchOn] = useState<boolean>(false);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -138,39 +144,72 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setAiFoodName('');
     setAiBrand('');
     setSuccessSavedToast(null);
+    setIsTorchOn(false);
+    setHasTorch(false);
+  };
+
+  const toggleTorch = async () => {
+    if (scannerRef.current) {
+      try {
+        await (scannerRef.current as any).applyVideoConstraints({
+          advanced: [{ torch: !isTorchOn }],
+        });
+        setIsTorchOn(!isTorchOn);
+      } catch (err) {
+        console.warn('Não foi possível alternar a lanterna:', err);
+      }
+    }
   };
 
   const startBarcodeScanner = async () => {
     setErrorMsg(null);
-    setStatusInfo('Iniciando câmera...');
+    setStatusInfo('Calibrando câmera de alta precisão...');
     setIsScanning(true);
+    setIsTorchOn(false);
 
     try {
+      // Suporte completo a formatos de código de barras de alimentos
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
         Html5QrcodeSupportedFormats.UPC_A,
         Html5QrcodeSupportedFormats.UPC_E,
         Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF,
         Html5QrcodeSupportedFormats.QR_CODE,
       ];
 
+      // Habilita BarcodeDetector nativo por hardware do navegador quando disponível
       const scanner = new Html5Qrcode('barcode-scanner-viewport', {
         formatsToSupport,
         verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
+        },
       });
       scannerRef.current = scanner;
 
-      let cameraConfig: any = { facingMode: 'environment' };
+      // Configuração de câmera de alta resolução e foco contínuo
+      let cameraConfig: any = {
+        facingMode: { ideal: 'environment' },
+        width: { min: 640, ideal: 1920 },
+        height: { min: 480, ideal: 1080 },
+        focusMode: 'continuous',
+      };
+
       try {
         const cameras = await Html5Qrcode.getCameras();
         if (cameras && cameras.length > 0) {
           const backCam = cameras.find((c) =>
             c.label.toLowerCase().includes('back') ||
             c.label.toLowerCase().includes('traseira') ||
-            c.label.toLowerCase().includes('environment')
+            c.label.toLowerCase().includes('environment') ||
+            c.label.toLowerCase().includes('rear')
           );
-          cameraConfig = backCam ? backCam.id : cameras[0].id;
+          if (backCam) {
+            cameraConfig = { deviceId: { exact: backCam.id } };
+          }
         }
       } catch (camErr) {
         // Fallback to environment
@@ -179,11 +218,19 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
       await scanner.start(
         cameraConfig,
         {
-          fps: 15,
-          qrbox: { width: 280, height: 160 },
-          aspectRatio: 1.5,
+          fps: 25,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const width = Math.floor(Math.min(viewfinderWidth * 0.94, 380));
+            const height = Math.floor(Math.min(viewfinderHeight * 0.65, 220));
+            return { width, height };
+          },
+          aspectRatio: 1.333333,
+          disableFlip: false,
         },
         async (decodedText) => {
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            try { navigator.vibrate(80); } catch {}
+          }
           await stopScanner();
           const clean = decodedText.trim();
           setScannedCode(clean);
@@ -196,7 +243,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         }
       );
 
-      setStatusInfo('Aponte para as barras pretas do código...');
+      // Checa suporte a lanterna
+      try {
+        const capabilities = (scanner as any).getRunningTrackCapabilities?.();
+        if (capabilities && 'torch' in capabilities) {
+          setHasTorch(true);
+        }
+      } catch {}
+
+      setStatusInfo('Aponte para o código de barras (mantenha a ~15cm)');
     } catch (err: any) {
       console.warn('Erro ao inicializar câmera do scanner:', err);
       setIsScanning(false);
@@ -673,7 +728,22 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             <>
               {/* Camera Scanner Viewport */}
               <div className="relative rounded-2xl bg-[#100C16] border border-[#33263F] overflow-hidden min-h-[200px] flex flex-col items-center justify-center p-4">
-                <div id="barcode-scanner-viewport" className="w-full max-w-sm rounded-xl overflow-hidden" />
+                <div id="barcode-scanner-viewport" className="w-full max-w-sm rounded-xl overflow-hidden relative" />
+
+                {/* Laser scan reticle animation when camera is scanning */}
+                {isScanning && (
+                  <div className="pointer-events-none absolute inset-x-8 inset-y-10 flex flex-col justify-between border-2 border-[#8B5CF6]/50 rounded-2xl overflow-hidden shadow-[0_0_25px_rgba(139,92,246,0.25)]">
+                    <div className="flex justify-between p-2">
+                      <div className="w-5 h-5 border-t-2 border-l-2 border-[#EC4899] rounded-tl-md" />
+                      <div className="w-5 h-5 border-t-2 border-r-2 border-[#EC4899] rounded-tr-md" />
+                    </div>
+                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-[#EC4899] to-transparent shadow-[0_0_12px_#EC4899] animate-pulse" />
+                    <div className="flex justify-between p-2">
+                      <div className="w-5 h-5 border-b-2 border-l-2 border-[#EC4899] rounded-bl-md" />
+                      <div className="w-5 h-5 border-b-2 border-r-2 border-[#EC4899] rounded-br-md" />
+                    </div>
+                  </div>
+                )}
 
                 {!isScanning ? (
                   <div className="text-center space-y-3 py-3 w-full">
@@ -685,7 +755,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         Ler código de barras do produto
                       </p>
                       <p className="text-xs text-[#B8AFC4] mt-0.5 max-w-sm mx-auto">
-                        Aponte a câmera ao vivo, envie uma foto do código ou digite o número.
+                        Câmera de alta precisão com suporte a EAN-13, EAN-8, UPC e foto.
                       </p>
                     </div>
 
@@ -719,11 +789,25 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-3 flex items-center gap-3">
+                  <div className="mt-3 flex items-center justify-center gap-2.5 z-10">
+                    {hasTorch && (
+                      <button
+                        type="button"
+                        onClick={toggleTorch}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                          isTorchOn
+                            ? 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/30'
+                            : 'bg-[#18121F] text-[#B8AFC4] border-[#33263F] hover:text-white'
+                        }`}
+                      >
+                        {isTorchOn ? <ZapOff className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+                        <span>{isTorchOn ? 'Apagar Lanterna' : 'Ligar Lanterna'}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={stopScanner}
-                      className="px-4 py-2 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
+                      className="px-4 py-1.5 rounded-xl bg-[#18121F] border border-[#33263F] text-xs text-[#B8AFC4] hover:text-[#F8F5FC] cursor-pointer"
                     >
                       Parar Câmera
                     </button>
