@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, MealLog, FoodItem, Recipe, WeeklyPlan, UserProfile, MealType, Marmita, DayOfWeek } from './types';
+import { AppState, MealLog, FoodItem, WeeklyPlan, UserProfile, MealType } from './types';
 import { StorageService, INITIAL_USER_PROFILE } from './services/storage';
 import { Header, MobileTabBar, MobileMenuDrawer, TabId } from './components/Navigation';
 import { MeuDia } from './components/MeuDia';
@@ -7,8 +7,6 @@ import { FoodScannerModal } from './components/FoodScannerModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { SemBalanca } from './components/SemBalanca';
 import { CalculadoraNutricional } from './components/CalculadoraNutricional';
-import { MinhasMarmitas } from './components/MinhasMarmitas';
-import { LivroReceitas } from './components/LivroReceitas';
 import { PlanejamentoSemanal } from './components/PlanejamentoSemanal';
 import { HistoricoNutricional } from './components/HistoricoNutricional';
 import { PerfilMariana } from './components/PerfilMariana';
@@ -153,122 +151,6 @@ export default function App() {
     });
   };
 
-  // Log Recipe to meal
-  const handleLogRecipeToMeal = (recipe: Recipe, targetType: MealType) => {
-    const today = new Date().toISOString().split('T')[0];
-    const foodItem: FoodItem = {
-      id: `recipe-food-${recipe.id}-${Date.now()}`,
-      name: recipe.title,
-      prepState: 'cozido',
-      portionGrams: 200,
-      calories: recipe.caloriesPerServing,
-      protein: recipe.proteinPerServing,
-      carbs: recipe.carbsPerServing,
-      fat: recipe.fatPerServing,
-      fiber: recipe.fiberPerServing,
-      source: 'TACO',
-      verified: true,
-    };
-
-    const newLog: MealLog = {
-      id: `meal-recipe-${Date.now()}`,
-      date: today,
-      mealType: targetType,
-      title: recipe.title,
-      foods: [foodItem],
-      totalCalories: recipe.caloriesPerServing,
-      totalProtein: recipe.proteinPerServing,
-      totalCarbs: recipe.carbsPerServing,
-      totalFat: recipe.fatPerServing,
-      totalFiber: recipe.fiberPerServing,
-      photoUrl: recipe.photoUrl,
-      createdAt: new Date().toISOString(),
-    };
-
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      todayLogs: [newLog, ...prev.todayLogs],
-    }));
-  };
-
-  // Marmita management
-  const handleSaveMarmita = (marmita: Marmita) => {
-    updateStateAndPersist((prev) => {
-      const exists = prev.marmitas.some((m) => m.id === marmita.id);
-      return {
-        ...prev,
-        marmitas: exists
-          ? prev.marmitas.map((m) => (m.id === marmita.id ? marmita : m))
-          : [marmita, ...prev.marmitas],
-      };
-    });
-  };
-
-  const handleDeleteMarmita = (id: string) => {
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      marmitas: prev.marmitas.filter((m) => m.id !== id),
-    }));
-  };
-
-  const handleLogMarmitaToMeal = (marmita: Marmita, targetType: MealType) => {
-    const today = new Date().toISOString().split('T')[0];
-    const foodItems: FoodItem[] = marmita.items.map((it, idx) => ({
-      id: `marmita-food-${marmita.id}-${idx}-${Date.now()}`,
-      name: it.foodName,
-      prepState: it.prepState || 'cozido',
-      portionGrams: it.weightGrams,
-      calories: it.calories,
-      protein: it.protein,
-      carbs: it.carbs,
-      fat: it.fat,
-      fiber: 0,
-      source: 'TACO',
-      verified: true,
-    }));
-
-    const newLog: MealLog = {
-      id: `meal-marmita-${Date.now()}`,
-      date: today,
-      mealType: targetType,
-      title: marmita.name,
-      foods: foodItems,
-      totalCalories: marmita.totalCalories,
-      totalProtein: marmita.totalProtein,
-      totalCarbs: marmita.totalCarbs,
-      totalFat: marmita.totalFat,
-      totalFiber: 0,
-      photoUrl: marmita.photoUrl,
-      createdAt: new Date().toISOString(),
-    };
-
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      todayLogs: [newLog, ...prev.todayLogs],
-    }));
-  };
-
-  const handleAddMarmitaToWeeklyPlan = (marmita: Marmita, day: string, targetType: MealType) => {
-    const planItem = {
-      id: `plan-marmita-${Date.now()}`,
-      mealType: targetType,
-      title: marmita.name,
-      marmitaId: marmita.id,
-      calories: marmita.totalCalories,
-      protein: marmita.totalProtein,
-      carbs: marmita.totalCarbs,
-      fat: marmita.totalFat,
-    };
-
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      weeklyPlan: {
-        ...prev.weeklyPlan,
-        [day as DayOfWeek]: [...(prev.weeklyPlan[day as DayOfWeek] || []), planItem],
-      },
-    }));
-  };
-
   // Delete a specific food item from a meal
   const handleDeleteFoodItem = (mealId: string, foodId: string) => {
     updateStateAndPersist((prev) => {
@@ -329,33 +211,6 @@ export default function App() {
     }));
   };
 
-  // Recipe management
-  const handleSaveRecipe = (recipe: Recipe) => {
-    updateStateAndPersist((prev) => {
-      const exists = prev.recipes.some((r) => r.id === recipe.id);
-      return {
-        ...prev,
-        recipes: exists
-          ? prev.recipes.map((r) => (r.id === recipe.id ? recipe : r))
-          : [recipe, ...prev.recipes],
-      };
-    });
-  };
-
-  const handleDeleteRecipe = (id: string) => {
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      recipes: prev.recipes.filter((r) => r.id !== id),
-    }));
-  };
-
-  const handleToggleFavorite = (id: string) => {
-    updateStateAndPersist((prev) => ({
-      ...prev,
-      recipes: prev.recipes.map((r) => (r.id === id ? { ...r, isFavorite: !r.isFavorite } : r)),
-    }));
-  };
-
   // Weekly plan update
   const handleUpdateWeeklyPlan = (newPlan: WeeklyPlan) => {
     updateStateAndPersist((prev) => ({
@@ -406,7 +261,6 @@ export default function App() {
         {activeTab === 'meu-dia' && (
           <MeuDia
             appState={appState}
-            onNavigateTab={setActiveTab}
             onOpenRegistrarGramas={(mealType) => {
               setSelectedMealTypeForAction(mealType || 'almoco');
               setIsRegistrarGramasOpen(true);
@@ -482,27 +336,6 @@ export default function App() {
             }}
             initialMealType={selectedMealTypeForAction}
             mealSlots={appState.mealSlots}
-          />
-        )}
-
-        {activeTab === 'marmitas' && (
-          <MinhasMarmitas
-            marmitas={appState.marmitas}
-            mealSlots={appState.mealSlots}
-            onSaveMarmita={handleSaveMarmita}
-            onDeleteMarmita={handleDeleteMarmita}
-            onLogMarmitaToMeal={handleLogMarmitaToMeal}
-            onAddToWeeklyPlan={handleAddMarmitaToWeeklyPlan}
-          />
-        )}
-
-        {activeTab === 'receitas' && (
-          <LivroReceitas
-            recipes={appState.recipes}
-            onSaveRecipe={handleSaveRecipe}
-            onDeleteRecipe={handleDeleteRecipe}
-            onToggleFavorite={handleToggleFavorite}
-            onLogRecipeToMeal={handleLogRecipeToMeal}
           />
         )}
 

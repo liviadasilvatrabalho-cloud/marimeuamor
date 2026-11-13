@@ -432,60 +432,6 @@ Responda em formato JSON:
   }
 });
 
-// POST Gemini Chat Assistant (receitas e dicas de comida estilo ChatGPT / Gemini)
-app.post('/api/gemini/chat', async (req, res) => {
-  try {
-    const { message, history } = req.body || {};
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Mensagem não fornecida' });
-    }
-
-    // Monta o histórico de conversa no formato do Gemini
-    const contents: any[] = [];
-    if (Array.isArray(history)) {
-      for (const h of history) {
-        if (h && h.role && h.text) {
-          contents.push({
-            role: h.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: String(h.text) }],
-          });
-        }
-      }
-    }
-    contents.push({ role: 'user', parts: [{ text: message }] });
-
-    const systemInstruction = `Você é o "Chef da Mari 💜", o assistente de inteligência artificial culinário pessoal e afetuoso do aplicativo Our Little Kitchen (atuando com inteligência e simpatia igual ao ChatGPT e Gemini, mas totalmente especializado na cozinha, rotina e alimentação da Mariana).
-Mariana ama comida caseira, saudável, saborosa, balanceada e prática.
-
-Você pode ajudar com:
-- Dicas e sugestões de pratos com base nos ingredientes que ela tem em casa.
-- Dicas culinárias (ponto de carne, técnicas de cozimento, tempo na airfryer, forno, frigideira ou vapor).
-- Substituições saudáveis (ex: trocar creme de leite por iogurte natural, farinhas integrais, reduzir óleo, adoçar sem açúcar).
-- Estimativas realistas de calorias e macros (proteínas, carboidratos, gorduras, fibras) baseadas na Tabela TACO/TBCA.
-- Dicas de conservação, preparo antecipado e congelamento de marmitas da semana.
-- Lanches rápidos de trabalho, opções pré-treino, doces saudáveis sem açúcar refinado.
-
-Estilo de conversa:
-- Fale em português do Brasil com tom caloroso, carinhoso e encorajador (use emojis como 💜, 🌸, 🥗, ✨).
-- Use formatação Markdown: títulos (###), negrito para ingredientes/quantidades e listas com marcadores (-) ou números (1., 2.) para passos.
-- Quando sugerir uma receita, forneça nome atraente, porções, tempo, lista clara de ingredientes com medidas e modo de preparo passo a passo.`;
-
-    const response = await callGemini({
-      contents,
-      systemInstruction,
-      temperature: 0.7,
-    });
-
-    const reply = response.text || 'Não consegui gerar uma resposta. Tente novamente.';
-    return res.json({ reply });
-  } catch (err: any) {
-    console.error('Erro no chat de receitas:', err);
-    return res.status(500).json({
-      error: 'Erro ao conversar com o assistente: ' + (err.message || 'Erro interno'),
-    });
-  }
-});
-
 // GET Open Food Facts Barcode Lookup
 app.get('/api/barcode/:code', async (req, res) => {
   const { code } = req.params;

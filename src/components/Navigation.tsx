@@ -4,8 +4,6 @@ import {
   Camera,
   Scale,
   Calculator,
-  Utensils,
-  BookOpen,
   CalendarDays,
   History,
   User,
@@ -24,8 +22,6 @@ export type TabId =
   | 'barcode'
   | 'sem-balanca'
   | 'calculadora'
-  | 'marmitas'
-  | 'receitas'
   | 'planejamento'
   | 'historico'
   | 'perfil';
@@ -128,27 +124,6 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
             Calculadora
           </button>
           <button
-            onClick={() => onSelectTab('marmitas')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'marmitas'
-                ? 'bg-[#18121F] text-[#A78BFA] border border-[#8B5CF6]/50'
-                : 'text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#18121F]/60'
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5 text-[#8B5CF6]" />
-            Marmitas
-          </button>
-          <button
-            onClick={() => onSelectTab('receitas')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'receitas'
-                ? 'bg-[#18121F] text-[#A78BFA] border border-[#8B5CF6]/50'
-                : 'text-[#B8AFC4] hover:text-[#F8F5FC] hover:bg-[#18121F]/60'
-            }`}
-          >
-            Receitas
-          </button>
-          <button
             onClick={() => onSelectTab('planejamento')}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
               activeTab === 'planejamento'
@@ -238,7 +213,7 @@ export const MobileTabBar: React.FC<
 }) => {
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#100C16]/95 backdrop-blur-lg border-t border-[#33263F] px-1 py-1 pb-safe shadow-2xl">
-      <div className="grid grid-cols-3 items-center justify-around max-w-md mx-auto">
+      <div className="grid grid-cols-2 items-center justify-around max-w-md mx-auto">
         {/* Tab 1: Meu Dia */}
         <button
           onClick={() => onSelectTab('meu-dia')}
@@ -260,17 +235,6 @@ export const MobileTabBar: React.FC<
             <Camera className="w-5 h-5 text-white" />
           </button>
         </div>
-
-        {/* Tab 4: Receitas */}
-        <button
-          onClick={() => onSelectTab('receitas')}
-          className={`flex flex-col items-center justify-center py-1 transition-colors min-h-[46px] cursor-pointer ${
-            activeTab === 'receitas' ? 'text-[#A78BFA]' : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-0.5">Receitas</span>
-        </button>
       </div>
     </div>
   );
@@ -336,20 +300,6 @@ export const MobileMenuDrawer: React.FC<{
       description: 'Cálculo proporcional por grama exata',
       icon: <Calculator className="w-4 h-4 text-[#8B5CF6]" />,
       color: 'border-[#8B5CF6]/40',
-    },
-    {
-      id: 'marmitas',
-      label: 'Minhas Marmitas',
-      description: 'Porções preparadas, status e congelamento',
-      icon: <Utensils className="w-4 h-4 text-[#A78BFA]" />,
-      color: 'border-[#A78BFA]/40',
-    },
-    {
-      id: 'receitas',
-      label: 'Livro de Receitas',
-      description: 'Receitas saudáveis e assistente culinário',
-      icon: <BookOpen className="w-4 h-4 text-[#EC4899]" />,
-      color: 'border-[#EC4899]/40',
     },
     {
       id: 'planejamento',

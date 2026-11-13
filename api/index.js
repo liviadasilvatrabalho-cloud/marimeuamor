@@ -3391,53 +3391,6 @@ Responda em formato JSON:
     return res.status(500).json({ error: "Erro ao gerar sugest\xE3o de receita" });
   }
 });
-app.post("/api/gemini/chat", async (req, res) => {
-  try {
-    const { message, history } = req.body || {};
-    if (!message || typeof message !== "string") {
-      return res.status(400).json({ error: "Mensagem n\xE3o fornecida" });
-    }
-    const contents = [];
-    if (Array.isArray(history)) {
-      for (const h of history) {
-        if (h && h.role && h.text) {
-          contents.push({
-            role: h.role === "assistant" ? "model" : "user",
-            parts: [{ text: String(h.text) }]
-          });
-        }
-      }
-    }
-    contents.push({ role: "user", parts: [{ text: message }] });
-    const systemInstruction = `Voc\xEA \xE9 o "Chef da Mari \u{1F49C}", o assistente de intelig\xEAncia artificial culin\xE1rio pessoal e afetuoso do aplicativo Our Little Kitchen (atuando com intelig\xEAncia e simpatia igual ao ChatGPT e Gemini, mas totalmente especializado na cozinha, rotina e alimenta\xE7\xE3o da Mariana).
-Mariana ama comida caseira, saud\xE1vel, saborosa, balanceada e pr\xE1tica.
-
-Voc\xEA pode ajudar com:
-- Dicas e sugest\xF5es de pratos com base nos ingredientes que ela tem em casa.
-- Dicas culin\xE1rias (ponto de carne, t\xE9cnicas de cozimento, tempo na airfryer, forno, frigideira ou vapor).
-- Substitui\xE7\xF5es saud\xE1veis (ex: trocar creme de leite por iogurte natural, farinhas integrais, reduzir \xF3leo, ado\xE7ar sem a\xE7\xFAcar).
-- Estimativas realistas de calorias e macros (prote\xEDnas, carboidratos, gorduras, fibras) baseadas na Tabela TACO/TBCA.
-- Dicas de conserva\xE7\xE3o, preparo antecipado e congelamento de marmitas da semana.
-- Lanches r\xE1pidos de trabalho, op\xE7\xF5es pr\xE9-treino, doces saud\xE1veis sem a\xE7\xFAcar refinado.
-
-Estilo de conversa:
-- Fale em portugu\xEAs do Brasil com tom caloroso, carinhoso e encorajador (use emojis como \u{1F49C}, \u{1F338}, \u{1F957}, \u2728).
-- Use formata\xE7\xE3o Markdown: t\xEDtulos (###), negrito para ingredientes/quantidades e listas com marcadores (-) ou n\xFAmeros (1., 2.) para passos.
-- Quando sugerir uma receita, forne\xE7a nome atraente, por\xE7\xF5es, tempo, lista clara de ingredientes com medidas e modo de preparo passo a passo.`;
-    const response = await callGemini({
-      contents,
-      systemInstruction,
-      temperature: 0.7
-    });
-    const reply = response.text || "N\xE3o consegui gerar uma resposta. Tente novamente.";
-    return res.json({ reply });
-  } catch (err) {
-    console.error("Erro no chat de receitas:", err);
-    return res.status(500).json({
-      error: "Erro ao conversar com o assistente: " + (err.message || "Erro interno")
-    });
-  }
-});
 app.get("/api/barcode/:code", async (req, res) => {
   const { code } = req.params;
   if (!code || !/^\d{6,14}$/.test(code.trim())) {

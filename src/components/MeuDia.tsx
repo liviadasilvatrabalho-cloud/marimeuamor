@@ -4,8 +4,6 @@ import {
   Barcode,
   Scale,
   Plus,
-  Utensils,
-  ChevronRight,
   Clock,
   Calendar,
   Trash2,
@@ -18,7 +16,6 @@ import { INITIAL_MEAL_SLOTS } from '../services/storage';
 
 interface MeuDiaProps {
   appState: AppState;
-  onNavigateTab: (tab: any) => void;
   onOpenRegistrarGramas: (mealType?: MealType) => void;
   onOpenPhotoScanner: (mealType?: MealType) => void;
   onOpenBarcodeScanner: (mealType?: MealType) => void;
@@ -32,7 +29,6 @@ interface MeuDiaProps {
 
 export const MeuDia: React.FC<MeuDiaProps> = ({
   appState,
-  onNavigateTab,
   onOpenRegistrarGramas,
   onOpenPhotoScanner,
   onOpenBarcodeScanner,
@@ -42,7 +38,7 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   onDeleteFoodItem,
   onUpdateMealSlots,
 }) => {
-  const { user, todayLogs, weeklyPlan } = appState;
+  const { user, todayLogs } = appState;
   const mealSlots = (appState.mealSlots && appState.mealSlots.length ? appState.mealSlots : INITIAL_MEAL_SLOTS);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,19 +98,6 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   } else if (currentHour >= 18 || currentHour < 5) {
     timeGreeting = 'Boa noite';
   }
-
-  // Get current day of week key
-  const dayNames: ('domingo' | 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado')[] = [
-    'domingo',
-    'segunda',
-    'terca',
-    'quarta',
-    'quinta',
-    'sexta',
-    'sabado',
-  ];
-  const todayDayKey = dayNames[new Date().getDay()];
-  const plannedToday = weeklyPlan[todayDayKey] || [];
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4 sm:space-y-6 pb-28 lg:pb-12">
@@ -223,54 +206,6 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
           </p>
         </div>
       </div>
-
-      {/* Planned Marmitas for Today (if any) */}
-      {plannedToday.length > 0 && (
-        <div className="rounded-2xl bg-[#18121F] border border-[#33263F] p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Utensils className="w-4 h-4 text-[#8B5CF6]" />
-              <h2 className="text-xs sm:text-sm font-semibold text-[#F8F5FC]">
-                Marmitas Planejadas para Hoje
-              </h2>
-            </div>
-            <button
-              onClick={() => onNavigateTab('planejamento')}
-              className="text-xs text-[#A78BFA] hover:text-[#F8F5FC] transition-colors"
-            >
-              Ver semana →
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-            {plannedToday.map((planItem) => (
-              <div
-                key={planItem.id}
-                className="p-3 rounded-xl bg-[#100C16] border border-[#33263F] flex items-center justify-between gap-3"
-              >
-                <div>
-                  <span className="text-[10px] text-[#EC4899] font-medium uppercase tracking-wider">
-                    {planItem.mealType === 'almoco'
-                      ? 'Almoço'
-                      : planItem.mealType === 'jantar'
-                      ? 'Jantar'
-                      : planItem.mealType}
-                  </span>
-                  <div className="flex items-center gap-2 text-xs text-[#B8AFC4] mt-0.5 font-mono-numbers">
-                    <span>{planItem.calories} kcal</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onNavigateTab('marmitas')}
-                  className="p-2 rounded-lg bg-[#18121F] hover:bg-[#22192C] text-[#A78BFA] transition-colors cursor-pointer"
-                  title="Ver detalhes da marmita"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Meals of the Day Summary */}
       <div className="space-y-3.5 sm:space-y-4">
