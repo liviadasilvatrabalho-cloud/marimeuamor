@@ -7,6 +7,8 @@ import {
   Flame,
   Utensils,
   Tag,
+  Database,
+  Barcode,
 } from 'lucide-react';
 import { TACO_TBCA_DATABASE, DatabaseFood, calculateNutritionalValues } from '../data/nutritionDatabase';
 import { FoodItem, MealType, MealSlot } from '../types';
@@ -17,22 +19,16 @@ interface RegistrarGramasModalProps {
   onClose: () => void;
   initialMealType?: MealType;
   mealSlots?: MealSlot[];
+  customFoods?: FoodItem[];
   onSaveMealItem: (item: FoodItem, targetType: MealType) => void;
 }
-
-const MEAL_OPTIONS: { id: MealType; label: string; icon: string }[] = [
-  { id: 'cafe', label: 'Café', icon: '☕' },
-  { id: 'almoco', label: 'Almoço', icon: '🥗' },
-  { id: 'lanche', label: 'Lanche', icon: '🍎' },
-  { id: 'jantar', label: 'Jantar', icon: '🍲' },
-  { id: 'ceia', label: 'Ceia', icon: '🌙' },
-];
 
 export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
   isOpen,
   onClose,
   initialMealType = 'almoco',
   mealSlots,
+  customFoods = [],
   onSaveMealItem,
 }) => {
   const [selectedMeal, setSelectedMeal] = useState<MealType>(initialMealType);
@@ -41,17 +37,20 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
   const [search, setSearch] = useState('');
 
   const slots = mealSlots && mealSlots.length ? mealSlots : INITIAL_MEAL_SLOTS;
+
+  // Selected item states
   const [selectedFood, setSelectedFood] = useState<DatabaseFood | null>(null);
+  const [selectedCustomFood, setSelectedCustomFood] = useState<FoodItem | null>(null);
   const [customFoodName, setCustomFoodName] = useState<string>('');
 
   // Direct kcal mode
   const [directCalories, setDirectCalories] = useState<number | ''>(200);
 
-  // Every time the modal opens, start with the grams field zeroed and no food selected
   useEffect(() => {
     if (isOpen) {
       setGrams('');
       setSelectedFood(null);
+      setSelectedCustomFood(null);
       setCustomFoodName('');
       setSearch('');
       setSelectedMeal(initialMealType);
@@ -60,21 +59,58 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Filtered foods for calculation
-  const filteredFoods = TACO_TBCA_DATABASE.filter((f) =>
+  // Filter custom foods saved by user in the database
+  const filteredCustomFoods = customFoods.filter((f) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      f.name.toLowerCase().includes(q) ||
+      (f.brand && f.brand.toLowerCase().includes(q)) ||
+      (f.barcode && f.barcode.includes(q))
+    );
+  }).slice(0, 6);
+
+  // Filter official TACO/TBCA foods
+  const filteredOfficialFoods = TACO_TBCA_DATABASE.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase())
   ).slice(0, 8);
 
   // Proportional calculation for the selected food and entered grams
   const parsedGrams = typeof grams === 'number' && grams > 0 ? grams : 0;
-  const calculatedNutrition = selectedFood
-    ? calculateNutritionalValues(selectedFood, parsedGrams)
-    : { portionGrams: 0, calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+
+  // Calculate nutrition for either official food or custom saved food
+  let calculatedNutrition = { portionGrams: 0, calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+
+  if (selectedFood) {
+    calculatedNutrition = calculateNutritionalValues(selectedFood, parsedGrams);
+  } else if (selectedCustomFood) {
+    const serving = selectedCustomFood.portionGrams || 100;
+    const p100 = selectedCustomFood.per100g || {
+      calories: Math.round(((selectedCustomFood.calories || 0) / serving) * 100),
+      protein: Number((((selectedCustomFood.protein || 0) / serving) * 100).toFixed(1)),
+      carbs: Number((((selectedCustomFood.carbs || 0) / serving) * 100).toFixed(1)),
+      fat: Number((((selectedCustomFood.fat || 0) / serving) * 100).toFixed(1)),
+      fiber: Number((((selectedCustomFood.fiber || 0) / serving) * 100).toFixed(1)),
+    };
+    const ratio = parsedGrams / 100;
+    calculatedNutrition = {
+      portionGrams: parsedGrams,
+      calories: Math.round((p100.calories || 0) * ratio),
+      protein: Number(((p100.protein || 0) * ratio).toFixed(1)),
+      carbs: Number(((p100.carbs || 0) * ratio).toFixed(1)),
+      fat: Number(((p100.fat || 0) * ratio).toFixed(1)),
+      fiber: Number(((p100.fiber || 0) * ratio).toFixed(1)),
+    };
+  }
 
   const currentFoodDisplayName =
-    customFoodName.trim() || (activeTab === 'tabela' ? selectedFood?.name || '' : 'Alimento');
+    customFoodName.trim() ||
+    (activeTab === 'tabela'
+      ? selectedCustomFood?.name || selectedFood?.name || ''
+      : 'Alimento');
 
-  const canConfirm = parsedGrams > 0 && (activeTab === 'direto' || selectedFood !== null);
+  const hasSelection = selectedFood !== null || selectedCustomFood !== null;
+  const canConfirm = parsedGrams > 0 && (activeTab === 'direto' || hasSelection);
 
   const handleConfirmSave = () => {
     if (!canConfirm) return;
@@ -98,14 +134,23 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
     const foodItem: FoodItem = {
       id: `gramas-${Date.now()}`,
       name: currentFoodDisplayName,
-      prepState: selectedFood?.prepState || 'cozido',
+      brand: selectedCustomFood?.brand || undefined,
+      barcode: selectedCustomFood?.barcode || undefined,
+      prepState: selectedFood?.prepState || selectedCustomFood?.prepState || 'cru',
       portionGrams: validGrams,
       calories: finalCalories,
       protein: finalProtein,
       carbs: finalCarbs,
       fat: finalFat,
       fiber: finalFiber,
-      source: activeTab === 'tabela' ? 'TACO' : 'Manual',
+      per100g: selectedCustomFood?.per100g || (selectedFood ? {
+        calories: selectedFood.caloriesPer100g,
+        protein: selectedFood.proteinPer100g,
+        carbs: selectedFood.carbsPer100g,
+        fat: selectedFood.fatPer100g,
+        fiber: selectedFood.fiberPer100g,
+      } : undefined),
+      source: selectedCustomFood ? selectedCustomFood.source : activeTab === 'tabela' ? 'TACO' : 'Manual',
       verified: true,
     };
 
@@ -125,10 +170,10 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
             </div>
             <div className="min-w-0">
               <h2 className="text-sm sm:text-lg font-bold text-[#F8F5FC] truncate">
-                Adicionar Alimento
+                Adicionar em Gramas
               </h2>
               <p className="text-[11px] sm:text-xs text-[#B8AFC4] truncate">
-                Cada alimento ficará separado na refeição com seu próprio peso e calorias.
+                Selecione da base ou dos seus produtos salvos e ajuste a quantidade
               </p>
             </div>
           </div>
@@ -143,7 +188,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
         {/* Meal Selector */}
         <div className="space-y-1">
           <label className="text-[11px] sm:text-xs font-medium text-[#B8AFC4] block">
-            Escolha o horário da refeição:
+            Escolha a refeição:
           </label>
           <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 gap-1.5">
             {slots.map((m) => (
@@ -158,9 +203,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
                 }`}
               >
                 <span className="text-xs sm:text-sm shrink-0">{m.icon}</span>
-                <span className="text-xs truncate">
-                  {m.label}
-                </span>
+                <span className="text-xs truncate">{m.label}</span>
               </button>
             ))}
           </div>
@@ -177,7 +220,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
                 : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
             }`}
           >
-            Calcular por Alimento
+            Alimentos & Produtos Salvos
           </button>
           <button
             type="button"
@@ -188,17 +231,17 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
                 : 'text-[#B8AFC4] hover:text-[#F8F5FC]'
             }`}
           >
-            Gramas & Calorias
+            Gramas & Calorias Direto
           </button>
         </div>
 
-        {/* Pure Grams Input - only appears after selecting a food */}
-        {(activeTab === 'direto' || selectedFood !== null) && (
-          <div className="p-3 sm:p-4 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-1.5">
+        {/* Input de Gramas - aparece após selecionar um alimento ou no modo direto */}
+        {(activeTab === 'direto' || hasSelection) && (
+          <div className="p-3 sm:p-4 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-1.5 animate-fadeIn">
             <label className="text-xs font-semibold text-[#F8F5FC] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Scale className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#A78BFA]" />
-                <span>Quantidade em Gramas:</span>
+                <span>Quantidade que vai consumir (em Gramas):</span>
               </span>
               <span className="text-xs font-mono-numbers text-[#A78BFA]">
                 {parsedGrams}g
@@ -225,76 +268,137 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
           </div>
         )}
 
-        {/* Tab 1: Food Selection for Real Calorie Calculation */}
+        {/* Tab 1: Alimentos Oficiais e Alimentos Salvos no Banco */}
         {activeTab === 'tabela' && (
           <div className="space-y-2.5 sm:space-y-3">
             <div className="space-y-1">
               <label className="text-[11px] sm:text-xs font-medium text-[#B8AFC4] block">
-                Pesquisar alimento:
+                Pesquisar alimento ou código de barras:
               </label>
               <div className="relative">
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Pesquisar (ex: arroz, frango, feijão...)"
+                  placeholder="Pesquisar (ex: frango, arroz, código de barras...)"
                   className="w-full pl-8 pr-3 py-2 rounded-xl bg-[#100C16] border border-[#33263F] text-xs text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
                 />
                 <Search className="w-3.5 h-3.5 text-[#B8AFC4] absolute left-2.5 top-2.5" />
               </div>
             </div>
 
-            {/* Quick List of Foods */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto overflow-x-hidden pr-0.5">
-              {filteredFoods.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedFood(f);
-                    setCustomFoodName(f.name);
-                  }}
-                  className={`p-2 rounded-xl text-left border flex items-center justify-between transition-all cursor-pointer min-w-0 ${
-                    selectedFood?.id === f.id
-                      ? 'bg-[#22192C] border-[#8B5CF6] text-[#F8F5FC]'
-                      : 'bg-[#100C16] border-[#33263F] text-[#B8AFC4] hover:border-[#8B5CF6]/30 hover:text-[#F8F5FC]'
-                  }`}
-                >
-                  <span className="text-xs truncate mr-1">{f.name}</span>
-                  <span className="text-[10px] font-mono-numbers shrink-0 text-[#A78BFA]">
-                    {f.caloriesPer100g} kcal
-                  </span>
-                </button>
-              ))}
+            {/* SEÇÃO 1: Alimentos Salvos no Banco da Mari (prioritários) */}
+            {filteredCustomFoods.length > 0 && (
+              <div className="space-y-1">
+                <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <Database className="w-3 h-3" />
+                  <span>Seus Produtos Salvos no Banco</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+                  {filteredCustomFoods.map((f) => {
+                    const isSelected = selectedCustomFood?.id === f.id;
+                    const serving = f.portionGrams || 100;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCustomFood(f);
+                          setSelectedFood(null);
+                          setCustomFoodName(f.name);
+                          if (!grams) setGrams(serving);
+                        }}
+                        className={`p-2 rounded-xl text-left border flex items-center justify-between transition-all cursor-pointer min-w-0 ${
+                          isSelected
+                            ? 'bg-[#1C2826] border-emerald-500 text-white shadow-sm'
+                            : 'bg-[#100C16] border-[#33263F] text-[#B8AFC4] hover:border-emerald-500/40 hover:text-[#F8F5FC]'
+                        }`}
+                      >
+                        <div className="min-w-0 mr-1.5">
+                          <span className="text-xs font-semibold block truncate">
+                            {f.name}
+                          </span>
+                          <span className="text-[10px] text-[#B8AFC4] truncate block">
+                            {f.brand ? `${f.brand} · ` : ''}
+                            {f.barcode ? `Cód: ${f.barcode}` : 'Salvo'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono-numbers shrink-0 text-emerald-400 font-bold">
+                          {f.calories} kcal
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* SEÇÃO 2: Tabela TACO / TBCA oficial */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wider block">
+                Tabela Oficial (TACO/TBCA)
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-0.5">
+                {filteredOfficialFoods.map((f) => {
+                  const isSelected = selectedFood?.id === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFood(f);
+                        setSelectedCustomFood(null);
+                        setCustomFoodName(f.name);
+                        if (!grams) setGrams(100);
+                      }}
+                      className={`p-2 rounded-xl text-left border flex items-center justify-between transition-all cursor-pointer min-w-0 ${
+                        isSelected
+                          ? 'bg-[#22192C] border-[#8B5CF6] text-[#F8F5FC]'
+                          : 'bg-[#100C16] border-[#33263F] text-[#B8AFC4] hover:border-[#8B5CF6]/30 hover:text-[#F8F5FC]'
+                      }`}
+                    >
+                      <span className="text-xs truncate mr-1">{f.name}</span>
+                      <span className="text-[10px] font-mono-numbers shrink-0 text-[#A78BFA]">
+                        {f.caloriesPer100g} kcal
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Editable Name Field for Selected Food */}
-            {selectedFood && (
-              <div className="p-2.5 sm:p-3 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-1">
-                <label className="text-[10px] sm:text-[11px] font-semibold text-[#B8AFC4] flex items-center gap-1.5">
+            {/* Nome editável do item selecionado */}
+            {hasSelection && (
+              <div className="p-2.5 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-1">
+                <label className="text-[10px] font-semibold text-[#B8AFC4] flex items-center gap-1.5">
                   <Tag className="w-3 h-3 text-[#A78BFA]" />
-                  <span>Nome que aparecerá no seu dia:</span>
+                  <span>Nome para exibir no registro da refeição:</span>
                 </label>
                 <input
                   type="text"
-                  value={customFoodName || selectedFood.name}
+                  value={customFoodName}
                   onChange={(e) => setCustomFoodName(e.target.value)}
-                  placeholder="Ex: Arroz Branco cozido"
+                  placeholder="Ex: Iogurte Danone, Frango grelhado..."
                   className="w-full py-1.5 px-2.5 rounded-xl bg-[#18121F] border border-[#33263F] text-xs font-semibold text-[#F8F5FC] focus:outline-none focus:border-[#8B5CF6]"
                 />
               </div>
             )}
 
-            {/* Result Preview Box */}
-            {selectedFood ? (
+            {/* Preview dinâmico de calorias recalculadas */}
+            {hasSelection ? (
               <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#18121F] to-[#100C16] border border-[#8B5CF6]/40 flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0">
                   <span className="text-[10px] text-[#A78BFA] uppercase font-semibold block">
-                    Cálculo Individual
+                    Cálculo Recalculado
                   </span>
                   <div className="text-xs text-[#B8AFC4] mt-0.5 truncate">
                     <strong className="text-[#F8F5FC]">{currentFoodDisplayName}</strong> ·{' '}
-                    <span className="font-mono-numbers">{parsedGrams}g</span>
+                    <span className="font-mono-numbers font-bold text-white">{parsedGrams}g</span>
+                  </div>
+                  <div className="flex gap-2 text-[10px] text-[#B8AFC4] mt-1 font-mono-numbers">
+                    <span>P: {calculatedNutrition.protein}g</span>
+                    <span>C: {calculatedNutrition.carbs}g</span>
+                    <span>G: {calculatedNutrition.fat}g</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -302,19 +406,19 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
                     {calculatedNutrition.calories} kcal
                   </div>
                   <div className="text-[9px] text-[#B8AFC4]">
-                    Tabela TACO oficial
+                    {selectedCustomFood ? 'Do seu banco de dados' : 'Tabela TACO oficial'}
                   </div>
                 </div>
               </div>
             ) : (
               <p className="text-[11px] text-[#B8AFC4] text-center italic py-1">
-                Toque em um alimento acima para digitar a quantidade em gramas.
+                Toque em um alimento acima para informar os gramas.
               </p>
             )}
           </div>
         )}
 
-        {/* Tab 2: Direct Calories & Grams */}
+        {/* Tab 2: Modo Direto */}
         {activeTab === 'direto' && (
           <div className="space-y-2.5 sm:space-y-3">
             <div className="p-3 sm:p-4 rounded-2xl bg-[#100C16] border border-[#33263F] space-y-1.5">
@@ -362,12 +466,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
           </div>
         )}
 
-        {/* Encouraging Note */}
-        <p className="text-[10px] sm:text-[11px] text-[#A78BFA] text-center italic">
-          💜 Cada alimento ficará separado na refeição com seu próprio peso e calorias.
-        </p>
-
-        {/* Confirm Button */}
+        {/* Botão de Confirmação */}
         <button
           type="button"
           onClick={handleConfirmSave}
@@ -381,7 +480,7 @@ export const RegistrarGramasModal: React.FC<RegistrarGramasModalProps> = ({
           <Check className="w-4 h-4 shrink-0" />
           <span className="truncate">
             {!canConfirm
-              ? activeTab === 'tabela' && !selectedFood
+              ? activeTab === 'tabela' && !hasSelection
                 ? 'Escolha um alimento para continuar'
                 : 'Digite a quantidade em gramas'
               : `Adicionar ${currentFoodDisplayName} (${parsedGrams}g · ${activeTab === 'tabela' ? calculatedNutrition.calories : (directCalories || 0)} kcal)`}

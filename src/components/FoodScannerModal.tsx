@@ -195,20 +195,31 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
       setConfidenceNotes(result.confidenceNotes || 'Reconhecimento baseado em proporções visuais e TACO');
       setAiQuestions(result.questionsForMariana || []);
 
-      const mappedItems: FoodItem[] = (result.items || []).map((it: any, index: number) => ({
-        id: `ai-food-${Date.now()}-${index}`,
-        name: it.foodName || 'Alimento',
-        prepState: (it.prepState as PrepState) || 'cozido',
-        portionGrams: Number(it.portionGrams) || 100,
-        calories: Math.round(Number(it.calories) || 0),
-        protein: Number(Number(it.protein || 0).toFixed(1)),
-        carbs: Number(Number(it.carbs || 0).toFixed(1)),
-        fat: Number(Number(it.fat || 0).toFixed(1)),
-        fiber: Number(Number(it.fiber || 0).toFixed(1)),
-        source: 'IA',
-        householdMeasure: it.reasoning || undefined,
-        verified: false,
-      }));
+      const mappedItems: FoodItem[] = (result.items || []).map((it: any, index: number) => {
+        const portion = Number(it.portionGrams) || 100;
+        const cal = Math.round(Number(it.calories) || 0);
+        return {
+          id: `ai-food-${Date.now()}-${index}`,
+          name: it.foodName || 'Alimento',
+          prepState: (it.prepState as PrepState) || 'cozido',
+          portionGrams: portion,
+          calories: cal,
+          protein: Number(Number(it.protein || 0).toFixed(1)),
+          carbs: Number(Number(it.carbs || 0).toFixed(1)),
+          fat: Number(Number(it.fat || 0).toFixed(1)),
+          fiber: Number(Number(it.fiber || 0).toFixed(1)),
+          per100g: {
+            calories: Number(it.kcalPer100g) || Math.round((cal / portion) * 100),
+            protein: Number(it.proteinPer100g) || 0,
+            carbs: Number(it.carbsPer100g) || 0,
+            fat: Number(it.fatPer100g) || 0,
+            fiber: Number(it.fiberPer100g) || 0,
+          },
+          source: 'IA',
+          householdMeasure: it.portionReasoning || it.reasoning || undefined,
+          verified: false,
+        };
+      });
 
       setVerifiedFoods(mappedItems);
       setIsVerifying(true);
@@ -278,7 +289,7 @@ export const FoodScannerModal: React.FC<FoodScannerModalProps> = ({
       id: `meal-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       mealType: mealType,
-      title: 'Porção Registrada',
+      title: detectedMealName || 'Refeição Analisada por IA',
       foods: verifiedFoods,
       totalCalories,
       totalProtein,

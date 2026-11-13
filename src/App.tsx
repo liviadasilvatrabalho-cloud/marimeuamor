@@ -183,6 +183,71 @@ export default function App() {
     });
   };
 
+  // Update grams and dynamically recalculate calories and macros for a food item in a meal
+  const handleUpdateFoodItemGrams = (mealId: string, foodId: string, newGrams: number) => {
+    updateStateAndPersist((prev) => {
+      const targetMeal = prev.todayLogs.find((l) => l.id === mealId);
+      if (!targetMeal) return prev;
+
+      const updatedFoods = targetMeal.foods.map((f) => {
+        if (f.id !== foodId) return f;
+        const g = Math.max(1, newGrams);
+        const p100 = f.per100g || {
+          calories: Math.round(((f.calories || 0) / (f.portionGrams || 100)) * 100),
+          protein: Number((((f.protein || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
+          carbs: Number((((f.carbs || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
+          fat: Number((((f.fat || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
+          fiber: Number((((f.fiber || 0) / (f.portionGrams || 100)) * 100).toFixed(1)),
+        };
+        const ratio = g / 100;
+        return {
+          ...f,
+          portionGrams: g,
+          calories: Math.round((p100.calories || 0) * ratio),
+          protein: Number(((p100.protein || 0) * ratio).toFixed(1)),
+          carbs: Number(((p100.carbs || 0) * ratio).toFixed(1)),
+          fat: Number(((p100.fat || 0) * ratio).toFixed(1)),
+          fiber: Number(((p100.fiber || 0) * ratio).toFixed(1)),
+          per100g: p100,
+        };
+      });
+
+      const updatedMeal: MealLog = {
+        ...targetMeal,
+        foods: updatedFoods,
+        totalCalories: updatedFoods.reduce((acc, f) => acc + f.calories, 0),
+        totalProtein: Number(updatedFoods.reduce((acc, f) => acc + f.protein, 0).toFixed(1)),
+        totalCarbs: Number(updatedFoods.reduce((acc, f) => acc + f.carbs, 0).toFixed(1)),
+        totalFat: Number(updatedFoods.reduce((acc, f) => acc + f.fat, 0).toFixed(1)),
+        totalFiber: Number(updatedFoods.reduce((acc, f) => acc + f.fiber, 0).toFixed(1)),
+      };
+
+      return {
+        ...prev,
+        todayLogs: prev.todayLogs.map((l) => (l.id === mealId ? updatedMeal : l)),
+      };
+    });
+  };
+
+  // Save food to user's database without duplicates
+  const handleSaveCustomFood = (food: FoodItem) => {
+    updateStateAndPersist((prev) => {
+      const existingList = Array.isArray(prev.customFoods) ? prev.customFoods : [];
+      const filtered = existingList.filter(
+        (f) =>
+          !(
+            (food.barcode && f.barcode && f.barcode === food.barcode) ||
+            (food.id && f.id === food.id) ||
+            f.name.toLowerCase().trim() === food.name.toLowerCase().trim()
+          )
+      );
+      return {
+        ...prev,
+        customFoods: [food, ...filtered],
+      };
+    });
+  };
+
   // Delete an entire meal
   const handleDeleteMeal = (mealId: string) => {
     updateStateAndPersist((prev) => ({
@@ -283,6 +348,7 @@ export default function App() {
             }}
             onDeleteMeal={handleDeleteMeal}
             onDeleteFoodItem={handleDeleteFoodItem}
+            onUpdateFoodItemGrams={handleUpdateFoodItemGrams}
             onUpdateMealSlots={(slots) => {
               updateStateAndPersist((prev) => ({ ...prev, mealSlots: slots }));
             }}
@@ -308,13 +374,9 @@ export default function App() {
               onClose={() => setActiveTab('meu-dia')}
               initialMealType={selectedMealTypeForAction}
               mealSlots={appState.mealSlots}
+              customFoods={appState.customFoods}
               onSaveMealItem={handleAddMealItem}
-              onSaveCustomFood={(food) => {
-                updateStateAndPersist((prev) => ({
-                  ...prev,
-                  customFoods: [food, ...prev.customFoods],
-                }));
-              }}
+              onSaveCustomFood={handleSaveCustomFood}
             />
           </div>
         )}
@@ -404,6 +466,7 @@ export default function App() {
         onClose={() => setIsRegistrarGramasOpen(false)}
         initialMealType={selectedMealTypeForAction}
         mealSlots={appState.mealSlots}
+        customFoods={appState.customFoods}
         onSaveMealItem={handleAddMealItem}
       />
 
@@ -422,13 +485,9 @@ export default function App() {
         onClose={() => setIsBarcodeScannerOpen(false)}
         initialMealType={selectedMealTypeForAction}
         mealSlots={appState.mealSlots}
+        customFoods={appState.customFoods}
         onSaveMealItem={handleAddMealItem}
-        onSaveCustomFood={(food) => {
-          updateStateAndPersist((prev) => ({
-            ...prev,
-            customFoods: [food, ...prev.customFoods],
-          }));
-        }}
+        onSaveCustomFood={handleSaveCustomFood}
       />
     </div>
   );

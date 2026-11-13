@@ -23,6 +23,7 @@ interface MeuDiaProps {
   onOpenCalculadora: (mealType?: MealType) => void;
   onDeleteMeal: (mealId: string) => void;
   onDeleteFoodItem?: (mealId: string, foodId: string) => void;
+  onUpdateFoodItemGrams?: (mealId: string, foodId: string, newGrams: number) => void;
   onUpdateMealSlots?: (slots: MealSlot[]) => void;
 }
 
@@ -36,6 +37,7 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   onOpenCalculadora,
   onDeleteMeal,
   onDeleteFoodItem,
+  onUpdateFoodItemGrams,
   onUpdateMealSlots,
 }) => {
   const { user, todayLogs } = appState;
@@ -45,6 +47,10 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
   const [editLabel, setEditLabel] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editIcon, setEditIcon] = useState('');
+
+  // Inline Grams Editor State
+  const [editingFoodKey, setEditingFoodKey] = useState<string | null>(null);
+  const [editingGrams, setEditingGrams] = useState<number>(100);
 
   const startEdit = (slot: MealSlot) => {
     setEditingId(slot.id);
@@ -393,24 +399,38 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                             ? food.name
                             : `Alimento #${index + 1}`;
 
+                        const isEditingThisFood = editingFoodKey === itemKey;
+
                         return (
                           <div
                             key={itemKey}
-                            className="p-2.5 sm:p-3 rounded-xl bg-[#100C16] border border-[#33263F]/70 flex items-center justify-between gap-3 hover:border-[#8B5CF6]/40 transition-colors"
+                            className="p-2.5 sm:p-3 rounded-xl bg-[#100C16] border border-[#33263F]/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-[#8B5CF6]/40 transition-colors"
                           >
-                            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#18121F] border border-[#33263F] flex items-center justify-center text-xs font-bold text-[#A78BFA] shrink-0 font-mono-numbers">
                                 #{index + 1}
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-xs sm:text-sm font-semibold text-[#F8F5FC] truncate">
                                     {foodDisplayName}
                                   </span>
-                                  {food.portionGrams > 0 && (
-                                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 text-[#A78BFA] text-[10px] font-bold font-mono-numbers shrink-0">
-                                      {food.portionGrams}g
-                                    </span>
+
+                                  {/* Botão de Gramas interativo: abre edição rápida */}
+                                  {!isEditingThisFood && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingFoodKey(itemKey);
+                                        setEditingGrams(food.portionGrams || 100);
+                                      }}
+                                      title="Clique para alterar a quantidade em gramas deste alimento"
+                                      className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 hover:bg-[#8B5CF6]/35 text-[#A78BFA] text-[10px] font-bold font-mono-numbers shrink-0 cursor-pointer transition-colors"
+                                    >
+                                      <Scale className="w-2.5 h-2.5" />
+                                      <span>{food.portionGrams > 0 ? `${food.portionGrams}g` : 'Ajustar g'}</span>
+                                      <Pencil className="w-2 h-2 ml-0.5 opacity-60" />
+                                    </button>
                                   )}
                                 </div>
                                 {food.prepState && food.prepState !== 'cru' && (
@@ -421,25 +441,81 @@ export const MeuDia: React.FC<MeuDiaProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                              <div className="text-right font-mono-numbers">
-                                <span className="text-xs sm:text-sm font-bold text-[#EC4899]">
-                                  {food.calories} kcal
-                                </span>
-                              </div>
+                            {/* Se estiver editando os gramas deste item */}
+                            {isEditingThisFood ? (
+                              <div className="flex items-center gap-2 bg-[#18121F] p-1.5 rounded-xl border border-[#8B5CF6] shrink-0 self-end sm:self-auto">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="3000"
+                                    value={editingGrams}
+                                    onChange={(e) =>
+                                      setEditingGrams(Math.max(1, parseInt(e.target.value) || 0))
+                                    }
+                                    className="w-16 px-1.5 py-1 text-center font-mono-numbers text-xs font-bold text-white bg-[#100C16] border border-[#33263F] rounded-lg focus:outline-none focus:border-[#8B5CF6]"
+                                  />
+                                  <span className="text-[11px] text-[#B8AFC4]">g</span>
+                                </div>
 
-                              <button
-                                onClick={() =>
-                                  onDeleteFoodItem
-                                    ? onDeleteFoodItem(logId, food.id)
-                                    : onDeleteMeal(logId)
-                                }
-                                title={`Remover ${foodDisplayName}`}
-                                className="p-1.5 rounded-lg text-[#B8AFC4] hover:text-rose-400 hover:bg-[#18121F] transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                                {/* Preview das calorias recalculadas */}
+                                {(() => {
+                                  const p100 = food.per100g || {
+                                    calories: Math.round(
+                                      ((food.calories || 0) / (food.portionGrams || 100)) * 100
+                                    ),
+                                  };
+                                  const liveKcal = Math.round((p100.calories || 0) * (editingGrams / 100));
+                                  return (
+                                    <span className="text-xs font-bold text-[#EC4899] font-mono-numbers px-1">
+                                      = {liveKcal} kcal
+                                    </span>
+                                  );
+                                })()}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onUpdateFoodItemGrams) {
+                                      onUpdateFoodItemGrams(logId, food.id, editingGrams);
+                                    }
+                                    setEditingFoodKey(null);
+                                  }}
+                                  title="Confirmar nova quantidade"
+                                  className="p-1 rounded-lg bg-[#8B5CF6] text-white hover:bg-[#7C3AED] transition-colors cursor-pointer"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingFoodKey(null)}
+                                  title="Cancelar"
+                                  className="p-1 rounded-lg bg-[#100C16] text-[#B8AFC4] border border-[#33263F] hover:text-[#F8F5FC] transition-colors cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-end sm:self-auto">
+                                <div className="text-right font-mono-numbers">
+                                  <span className="text-xs sm:text-sm font-bold text-[#EC4899]">
+                                    {food.calories} kcal
+                                  </span>
+                                </div>
+
+                                <button
+                                  onClick={() =>
+                                    onDeleteFoodItem
+                                      ? onDeleteFoodItem(logId, food.id)
+                                      : onDeleteMeal(logId)
+                                  }
+                                  title={`Remover ${foodDisplayName}`}
+                                  className="p-1.5 rounded-lg text-[#B8AFC4] hover:text-rose-400 hover:bg-[#18121F] transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       });
