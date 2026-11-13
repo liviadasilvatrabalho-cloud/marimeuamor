@@ -180,8 +180,8 @@ async function runEndToEndTests() {
   console.log('\n--- Teste 8 & 9: Alterar Nome e Meta Diária no Perfil ---');
   currentState.user = {
     ...currentState.user,
-    name: 'Lívia e Mari',
-    calorieGoal: 2250,
+    name: 'Mari',
+    calorieGoal: 2000,
   };
   await pool.query("UPDATE app_state SET data = $1::jsonb, updated_at = now() WHERE id = $2", [
     JSON.stringify(currentState),
@@ -190,7 +190,7 @@ async function runEndToEndTests() {
 
   const verifyProfileRes = await pool.query('SELECT data FROM app_state WHERE id = $1', [STATE_ID]);
   const loadedUser = verifyProfileRes.rows[0]?.data?.user;
-  if (loadedUser.name !== 'Lívia e Mari' || loadedUser.calorieGoal !== 2250) {
+  if (loadedUser.name !== 'Mari' || loadedUser.calorieGoal !== 2000) {
     throw new Error(`Falha no Teste 8/9: Perfil não persistido: ${JSON.stringify(loadedUser)}`);
   }
   console.log(`✅ 8. Nome da usuária alterado para: "${loadedUser.name}"`);
@@ -430,8 +430,8 @@ async function runEndToEndTests() {
   const reloadedAppState = finalDbRead.rows[0]?.data;
 
   if (!reloadedAppState) throw new Error('Falha no Teste 18: Banco retornou vazio!');
-  if (reloadedAppState.user?.name !== 'Lívia e Mari') throw new Error('Falha no Teste 19: Nome não persistiu!');
-  if (reloadedAppState.user?.calorieGoal !== 2250) throw new Error('Falha no Teste 19: Meta calórica não persistiu!');
+  if (reloadedAppState.user?.name !== 'Mari') throw new Error('Falha no Teste 19: Nome não persistiu!');
+  if (reloadedAppState.user?.calorieGoal !== 2000) throw new Error('Falha no Teste 19: Meta calórica não persistiu!');
 
   console.log(`✅ 18. Simulação de reabertura concluída.`);
   console.log(`✅ 19. TODOS OS DADOS CONTINUAM SALVOS PERMANENTEMENTE NO NEON POSTGRES!`);
@@ -441,6 +441,53 @@ async function runEndToEndTests() {
   console.log(`      - Alimentos na Biblioteca: ${reloadedAppState.customFoods.length}`);
 
   console.log('\n🎉 SUCESSO ABSOLUTO: TODAS AS 19 ETAPAS FORAM TESTADAS E APROVADAS COM 100% DE EXATIDÃO!');
+
+  // Reset final para deixar o banco completamente limpo para primeiro uso da Mari
+  console.log('\n🧹 Limpando dados de teste para primeiro uso da Mari...');
+  await pool.query('DELETE FROM meals');
+  await pool.query('DELETE FROM foods');
+  await pool.query('DELETE FROM products');
+  await pool.query('DELETE FROM recipes');
+  await pool.query('DELETE FROM marmitas');
+  await pool.query('DELETE FROM orders');
+  await pool.query('DELETE FROM shopping_lists');
+
+  const pristineState = {
+    user: {
+      name: 'Mari',
+      email: 'mari@mariamore.app',
+      calorieGoal: 2000,
+      macros: { proteinGrams: 115, carbsGrams: 200, fatGrams: 50 },
+      waterGoalMl: 2000,
+      waterDrankMl: 0,
+      currentWeightKg: 58.0,
+      targetWeightKg: 57.0,
+      heightCm: 164,
+      dietPreference: 'Equilibrada & Saudável',
+    },
+    todayLogs: [],
+    historyLogs: [],
+    customFoods: [],
+    marmitas: [],
+    recipes: [],
+    weeklyPlan: { segunda: [], terca: [], quarta: [], quinta: [], sexta: [], sabado: [], domingo: [] },
+    mealSlots: [
+      { id: 'cafe', label: 'Café da Manhã', timeHint: '07:00 - 09:30', icon: '☕' },
+      { id: 'lanche_manha', label: 'Lanche da Manhã', timeHint: '10:00 - 11:30', icon: '🍌' },
+      { id: 'almoco', label: 'Almoço', timeHint: '12:00 - 14:00', icon: '🥗' },
+      { id: 'lanche', label: 'Lanche da Tarde', timeHint: '16:00 - 17:30', icon: '🍎' },
+      { id: 'jantar', label: 'Jantar', timeHint: '19:30 - 21:00', icon: '🍲' },
+      { id: 'ceia', label: 'Ceia', timeHint: '22:00 - 23:00', icon: '🌙' },
+    ],
+    lastUpdated: new Date().toISOString(),
+  };
+
+  await pool.query(
+    "UPDATE app_state SET data = $1::jsonb, updated_at = now() WHERE id = $2",
+    [JSON.stringify(pristineState), STATE_ID]
+  );
+  console.log('✅ Banco deixado 100% limpo, com perfil Mari e 0 alimentos salvos/refeições.');
+
   process.exit(0);
 }
 

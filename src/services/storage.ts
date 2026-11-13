@@ -12,20 +12,26 @@ function profileHeaders(extra?: Record<string, string>): Record<string, string> 
   return h;
 }
 
-const LOCAL_STORAGE_KEY = 'our_little_kitchen_mari_v3';
+const LOCAL_STORAGE_KEY = 'mari_amore_v1';
+const LEGACY_STORAGE_KEYS = [
+  'our_little_kitchen_mari_v3',
+  'our_little_kitchen_mari_v2',
+  'our_little_kitchen_mari_v1',
+  'our_little_kitchen_state',
+];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
-  name: 'Mariana',
-  email: 'mariana@ourlittlekitchen.app',
-  calorieGoal: 1850,
+  name: 'Mari',
+  email: 'mari@mariamore.app',
+  calorieGoal: 2000,
   macros: {
     proteinGrams: 115,
     carbsGrams: 200,
     fatGrams: 50,
   },
-  waterGoalMl: 2200,
+  waterGoalMl: 2000,
   waterDrankMl: 0,
-  currentWeightKg: 58.5,
+  currentWeightKg: 58.0,
   targetWeightKg: 57.0,
   heightCm: 164,
   dietPreference: 'Equilibrada & Saudável',
@@ -59,22 +65,45 @@ export function getInitialTodayLogs(): MealLog[] {
   return [];
 }
 
+function sanitizeUser(user: any): UserProfile {
+  if (!user) return INITIAL_USER_PROFILE;
+  const rawName = String(user.name || '').trim();
+  const name = !rawName || rawName.toLowerCase().includes('l') || rawName.toLowerCase() === 'mariana' ? 'Mari' : rawName;
+  return {
+    ...INITIAL_USER_PROFILE,
+    ...user,
+    name,
+    email: user.email || 'mari@mariamore.app',
+  };
+}
+
 export const StorageService = {
   // Load state from local or server
   async loadState(): Promise<AppState> {
+    // Limpa versões antigas do localStorage
+    try {
+      for (const k of LEGACY_STORAGE_KEYS) {
+        localStorage.removeItem(k);
+      }
+    } catch {
+      /* ignore */
+    }
+
     // Try server first
     try {
       const res = await fetch('/api/storage', { credentials: 'same-origin', headers: profileHeaders() });
       if (res.ok) {
         const serverData = await res.json();
         if (serverData && serverData.user) {
-          serverData.user.name = serverData.user.name || 'Mariana';
-          serverData.user.email = serverData.user.email || 'mariana@ourlittlekitchen.app';
+          serverData.user = sanitizeUser(serverData.user);
           if (!serverData.todayLogs) {
             serverData.todayLogs = [];
           }
           if (!serverData.historyLogs) {
             serverData.historyLogs = [];
+          }
+          if (!serverData.customFoods) {
+            serverData.customFoods = [];
           }
           if (!serverData.marmitas) {
             serverData.marmitas = [];
@@ -102,8 +131,7 @@ export const StorageService = {
       if (local) {
         const parsed = JSON.parse(local);
         if (parsed && parsed.user) {
-          parsed.user.name = parsed.user.name || 'Mariana';
-          parsed.user.email = parsed.user.email || 'mariana@ourlittlekitchen.app';
+          parsed.user = sanitizeUser(parsed.user);
           return parsed;
         }
       }
@@ -111,7 +139,7 @@ export const StorageService = {
       console.error('Erro ao ler localStorage:', e);
     }
 
-    // Return complete fresh state with zero meal records
+    // Return complete fresh state with zero meal records and zero custom foods
     const defaultState: AppState = {
       user: INITIAL_USER_PROFILE,
       todayLogs: [],
@@ -136,8 +164,7 @@ export const StorageService = {
       if (!res.ok) return null;
       const data = await res.json();
       if (data?.user) {
-        data.user.name = data.user.name || 'Mariana';
-        data.user.email = data.user.email || 'mariana@ourlittlekitchen.app';
+        data.user = sanitizeUser(data.user);
       }
       return data?.user ? (data as AppState) : null;
     } catch {

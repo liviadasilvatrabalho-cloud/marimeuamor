@@ -192,10 +192,10 @@ export const Header: React.FC<NavigationProps & { onOpenMobileMenu?: () => void 
                 ? 'border-[#EC4899] ring-2 ring-[#EC4899]/30 bg-[#18121F]'
                 : 'border-[#33263F] bg-[#18121F] hover:border-[#8B5CF6]'
             }`}
-            title={`Perfil de ${user.name || 'Mari'}`}
+            title="Perfil da Mari"
           >
             <span className="text-xs font-bold text-[#F472B6]">
-              {(user.name || 'Mari').charAt(0).toUpperCase()}
+              M
             </span>
           </button>
 

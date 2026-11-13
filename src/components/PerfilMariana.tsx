@@ -23,14 +23,14 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
   user,
   onUpdateProfile,
 }) => {
-  const [userName, setUserName] = useState<string>(user.name || 'Mariana');
-  const [calorieGoal, setCalorieGoal] = useState<number>(user.calorieGoal || 2200);
+  const [userName, setUserName] = useState<string>('Mari');
+  const [calorieGoal, setCalorieGoal] = useState<number>(user.calorieGoal || 2000);
   const [isSavedToast, setIsSavedToast] = useState(false);
 
   const handleSaveProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmedName = userName.trim() || 'Mariana';
-    const validGoal = Math.max(500, Math.min(8000, calorieGoal || 2200));
+    const trimmedName = userName.trim() || 'Mari';
+    const validGoal = Math.max(500, Math.min(8000, calorieGoal || 2000));
 
     const updatedUser: UserProfile = {
       ...user,
@@ -53,7 +53,7 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
       {isSavedToast && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#6D28D9] via-[#8B5CF6] to-[#EC4899] text-white text-xs font-bold flex items-center gap-3 shadow-2xl shadow-[#EC4899]/40 border border-white/20 animate-in fade-in slide-in-from-top-4 duration-300">
           <Sparkles className="w-4 h-4 text-pink-200 animate-spin" />
-          <span>Perfil atualizado com sucesso! 💜🌸</span>
+          <span>Perfil da Mari atualizado com sucesso! 💜🌸</span>
           <Check className="w-4 h-4 text-emerald-200 ml-1" />
         </div>
       )}
@@ -65,16 +65,16 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
 
         <div className="relative z-10 flex flex-col items-center">
           <div className="w-16 h-16 rounded-full p-1 bg-gradient-to-tr from-[#6D28D9] via-[#EC4899] to-[#A78BFA] shadow-lg shadow-[#8B5CF6]/30 mb-3 flex items-center justify-center">
-            <div className="w-full h-full rounded-full bg-[#100C16] flex items-center justify-center text-xl font-bold text-[#F472B6]">
-              {userName.charAt(0).toUpperCase() || 'M'}
+            <div className="w-full h-full rounded-full bg-[#100C16] flex items-center justify-center text-2xl font-bold text-[#F472B6]">
+              M
             </div>
           </div>
 
           <h1 className="font-heading text-xl sm:text-2xl font-bold text-[#F8F5FC]">
-            Perfil da {userName || 'Mari'} 🌸
+            Perfil da Mari 🌸
           </h1>
           <p className="text-xs text-[#B8AFC4] mt-1">
-            Espaço pessoal da Mari amore: edite seu nome e sua meta diária de calorias
+            Espaço pessoal da Mari amore: meta diária de calorias e acompanhamento
           </p>
         </div>
       </div>
@@ -89,10 +89,10 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
             </div>
             <div>
               <h2 className="text-xs font-bold uppercase tracking-wider text-[#A78BFA]">
-                1. Nome da Usuária
+                Nome no Aplicativo
               </h2>
               <p className="text-[11px] text-[#B8AFC4]">
-                Nome exibido nas saudações e no acompanhamento do diário
+                Nome exibido nas saudações e no diário
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export const PerfilMariana: React.FC<PerfilMarianaProps> = ({
               required
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              placeholder="Digite seu nome (ex: Mari ou Mariana)"
+              placeholder="Mari"
               className="w-full px-4 py-3 rounded-2xl bg-[#1A1224] border border-[#322046] focus:border-[#8B5CF6] text-sm font-bold text-[#FAF8FC] placeholder-[#7B6E8F] focus:outline-none transition-colors"
             />
           </div>

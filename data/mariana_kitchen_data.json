@@ -1,8 +1,8 @@
 {
   "user": {
     "name": "Mari",
-    "email": "mari@ourlittlekitchen.app",
-    "calorieGoal": 1850,
+    "email": "mari@mariamore.app",
+    "calorieGoal": 2200,
     "macros": {
       "proteinGrams": 115,
       "carbsGrams": 200,
@@ -12,197 +12,14 @@
     "waterDrankMl": 0,
     "currentWeightKg": 58.5,
     "targetWeightKg": 57,
-    "heightCm": 164
+    "heightCm": 164,
+    "dietPreference": "Equilibrada & Saudável"
   },
   "todayLogs": [],
   "historyLogs": [],
-  "marmitas": [
-    {
-      "id": "marmita-1",
-      "name": "Marmita Clássica Fit de Frango & Abóbora",
-      "description": "Peito de frango grelhado em cubos, arroz integral soltinho, brócolis no vapor e cubos de abóbora cabotiá assada.",
-      "photoUrl": "/src/assets/images/marmita_prep_dish_1794179957885.jpg",
-      "prepNotes": "Temperar o frango com alho, limão e ervas finas. Cozinhar o brócolis por apenas 4 minutos para manter crocância e cor.",
-      "items": [
-        {
-          "id": "item-1",
-          "foodName": "Peito de frango grelhado",
-          "prepState": "grelhado",
-          "weightGrams": 130,
-          "calories": 207,
-          "protein": 41.6,
-          "carbs": 0,
-          "fat": 3.3,
-          "fiber": 0
-        },
-        {
-          "id": "item-2",
-          "foodName": "Arroz integral cozido",
-          "prepState": "cozido",
-          "weightGrams": 100,
-          "calories": 124,
-          "protein": 2.6,
-          "carbs": 25.8,
-          "fat": 1,
-          "fiber": 2.7
-        },
-        {
-          "id": "item-3",
-          "foodName": "Brócolis no vapor",
-          "prepState": "no_vapor",
-          "weightGrams": 80,
-          "calories": 20,
-          "protein": 1.7,
-          "carbs": 3.5,
-          "fat": 0.4,
-          "fiber": 2.7
-        },
-        {
-          "id": "item-4",
-          "foodName": "Abóbora cabotiá cozida",
-          "prepState": "cozido",
-          "weightGrams": 80,
-          "calories": 38,
-          "protein": 1.1,
-          "carbs": 8.6,
-          "fat": 0.2,
-          "fiber": 2
-        }
-      ],
-      "totalCalories": 389,
-      "totalProtein": 47,
-      "totalCarbs": 37.9,
-      "totalFat": 4.9,
-      "totalFiber": 7.4,
-      "createdAt": "2026-11-09T23:07:43.261Z"
-    },
-    {
-      "id": "marmita-2",
-      "name": "Marmita Patinho com Mandioca e Vagem",
-      "description": "Patinho moído refogado com cebola roxa e azeite, acompanhado de purê rústico de mandioca e vagem no vapor.",
-      "photoUrl": "/src/assets/images/hero_kitchen_cover_1794179944769.jpg",
-      "prepNotes": "Adicionar cheiro-verde fresco após desligar a panela para preservar o aroma.",
-      "items": [
-        {
-          "id": "item-2-1",
-          "foodName": "Patinho bovino moído refogado",
-          "prepState": "refogado",
-          "weightGrams": 120,
-          "calories": 210,
-          "protein": 32.6,
-          "carbs": 0,
-          "fat": 8.2,
-          "fiber": 0
-        },
-        {
-          "id": "item-2-2",
-          "foodName": "Mandioca cozida",
-          "prepState": "cozido",
-          "weightGrams": 100,
-          "calories": 125,
-          "protein": 0.6,
-          "carbs": 30.1,
-          "fat": 0.3,
-          "fiber": 1.9
-        }
-      ],
-      "totalCalories": 335,
-      "totalProtein": 33.2,
-      "totalCarbs": 30.1,
-      "totalFat": 8.5,
-      "totalFiber": 1.9,
-      "createdAt": "2026-11-09T23:07:43.261Z"
-    }
-  ],
-  "recipes": [
-    {
-      "id": "rec-1",
-      "title": "Crepioca Cremosa de Queijo Minas & Orégano",
-      "description": "Receita rápida e fofa para o café da manhã ou lanche da tarde da Mari.",
-      "photoUrl": "/src/assets/images/hero_kitchen_cover_1794179944769.jpg",
-      "prepTimeMinutes": 10,
-      "servings": 1,
-      "caloriesPerServing": 245,
-      "proteinPerServing": 16.5,
-      "carbsPerServing": 24,
-      "fatPerServing": 9.2,
-      "fiberPerServing": 0.5,
-      "isFavorite": true,
-      "ingredients": [
-        {
-          "name": "Ovo inteiro de galinha",
-          "amount": "1 unidade (50g)",
-          "grams": 50
-        },
-        {
-          "name": "Goma de tapioca hidratada",
-          "amount": "2 colheres de sopa cheias (40g)",
-          "grams": 40
-        },
-        {
-          "name": "Queijo minas frescal picado",
-          "amount": "1 fatia média (30g)",
-          "grams": 30
-        },
-        {
-          "name": "Orégano e pitada de sal rosa",
-          "amount": "A gosto"
-        }
-      ],
-      "instructions": [
-        "Em uma tigela pequena, bata o ovo com um garfo até espumar levemente.",
-        "Adicione as 2 colheres de sopa de tapioca e misture bem até ficar homogêneo.",
-        "Tempere com orégano e uma pitadinha de sal.",
-        "Aqueça uma frigideira antiaderente untada com 1 gota de azeite.",
-        "Despeje a massa, espalhe o queijo minas por cima e tampe por 2 minutos em fogo baixo.",
-        "Dobre ao meio quando dourar e sirva quentinha com carinho!"
-      ],
-      "carinhoTip": "Fica perfeita acompanhada de um café fresquinho passado na hora! 💜",
-      "createdAt": "2026-11-09T23:07:43.261Z"
-    },
-    {
-      "id": "rec-2",
-      "title": "Bowl Noturno de Iogurte com Morangos & Chia",
-      "description": "Ceia leve rica em triptofano para um sono tranquilo e reparador.",
-      "photoUrl": "/src/assets/images/marmita_prep_dish_1794179957885.jpg",
-      "prepTimeMinutes": 5,
-      "servings": 1,
-      "caloriesPerServing": 175,
-      "proteinPerServing": 12,
-      "carbsPerServing": 19.5,
-      "fatPerServing": 4.8,
-      "fiberPerServing": 4.5,
-      "isFavorite": true,
-      "ingredients": [
-        {
-          "name": "Iogurte natural desnatado",
-          "amount": "1 pote (170g)",
-          "grams": 170
-        },
-        {
-          "name": "Morangos frescos fatiados",
-          "amount": "5 unidades médias (75g)",
-          "grams": 75
-        },
-        {
-          "name": "Sementes de chia",
-          "amount": "1 colher de chá (5g)",
-          "grams": 5
-        },
-        {
-          "name": "Canela em pó",
-          "amount": "1 pitada"
-        }
-      ],
-      "instructions": [
-        "Coloque o iogurte desnatado no seu bowl preferido.",
-        "Disponha os morangos frescos fatiados.",
-        "Polvilhe as sementes de chia e uma pitada de canela em pó."
-      ],
-      "carinhoTip": "Se quiser mais doce, pode adicionar 2 gotinhas de estévia pura.",
-      "createdAt": "2026-11-09T23:07:43.261Z"
-    }
-  ],
+  "customFoods": [],
+  "marmitas": [],
+  "recipes": [],
   "weeklyPlan": {
     "segunda": [],
     "terca": [],
@@ -212,6 +29,5 @@
     "sabado": [],
     "domingo": []
   },
-  "customFoods": [],
-  "lastUpdated": "2026-11-09T23:19:58.734Z"
+  "lastUpdated": "2026-11-13T20:42:53.684Z"
 }
