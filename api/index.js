@@ -4,7 +4,7 @@ dotenv.config({ path: [".env.local", ".env"] });
 
 // server.ts
 import express from "express";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import path4 from "path";
 
 // db.ts
@@ -3091,6 +3091,7 @@ async function callGemini(params) {
       const config = {};
       if (params.systemInstruction) config.systemInstruction = params.systemInstruction;
       if (params.responseMimeType) config.responseMimeType = params.responseMimeType;
+      if (params.responseSchema) config.responseSchema = params.responseSchema;
       if (params.temperature !== void 0) config.temperature = params.temperature;
       const response = await ai.models.generateContent({
         model,
@@ -3187,6 +3188,148 @@ app.post("/api/storage", async (req, res) => {
     return res.status(500).json({ error: "Erro ao gravar dados no servidor" });
   }
 });
+var MEAL_ANALYSIS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    mealName: { type: Type.STRING },
+    overallConfidence: { type: Type.INTEGER },
+    confidenceNotes: { type: Type.STRING },
+    questionsForMariana: { type: Type.ARRAY, items: { type: Type.STRING } },
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          foodName: { type: Type.STRING },
+          prepState: { type: Type.STRING },
+          portionGrams: { type: Type.NUMBER },
+          portionReasoning: { type: Type.STRING },
+          kcalPer100g: { type: Type.NUMBER },
+          proteinPer100g: { type: Type.NUMBER },
+          carbsPer100g: { type: Type.NUMBER },
+          fatPer100g: { type: Type.NUMBER },
+          fiberPer100g: { type: Type.NUMBER },
+          confidence: { type: Type.INTEGER },
+          reasoning: { type: Type.STRING },
+          calories: { type: Type.NUMBER },
+          protein: { type: Type.NUMBER },
+          carbs: { type: Type.NUMBER },
+          fat: { type: Type.NUMBER },
+          fiber: { type: Type.NUMBER }
+        },
+        required: [
+          "foodName",
+          "prepState",
+          "portionGrams",
+          "portionReasoning",
+          "kcalPer100g",
+          "proteinPer100g",
+          "carbsPer100g",
+          "fatPer100g",
+          "fiberPer100g",
+          "confidence",
+          "reasoning",
+          "calories",
+          "protein",
+          "carbs",
+          "fat",
+          "fiber"
+        ]
+      }
+    },
+    totals: {
+      type: Type.OBJECT,
+      properties: {
+        totalGrams: { type: Type.NUMBER },
+        calories: { type: Type.NUMBER },
+        protein: { type: Type.NUMBER },
+        carbs: { type: Type.NUMBER },
+        fat: { type: Type.NUMBER },
+        fiber: { type: Type.NUMBER }
+      },
+      required: ["totalGrams", "calories", "protein", "carbs", "fat", "fiber"]
+    }
+  },
+  required: ["mealName", "overallConfidence", "confidenceNotes", "questionsForMariana", "items", "totals"]
+};
+function parseJsonLoose(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+      }
+    }
+    return {};
+  }
+}
+function clampNum(v, min, max, fallback) {
+  const n = Number(v);
+  if (!isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+function normalizeMealAnalysis(parsed) {
+  const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
+  const items = rawItems.map((it) => {
+    const portionGrams = clampNum(it?.portionGrams, 1, 2e3, 0);
+    if (portionGrams <= 0) return null;
+    const kcal100 = clampNum(it?.kcalPer100g, 0, 950, 0);
+    const p100 = clampNum(it?.proteinPer100g, 0, 100, 0);
+    const c100 = clampNum(it?.carbsPer100g, 0, 100, 0);
+    const g100 = clampNum(it?.fatPer100g, 0, 100, 0);
+    const f100 = clampNum(it?.fiberPer100g, 0, 90, 0);
+    const round12 = (x) => Math.round(x * 10) / 10;
+    const portion = Math.round(portionGrams * 10) / 10;
+    return {
+      foodName: String(it?.foodName || "Alimento").slice(0, 120),
+      prepState: String(it?.prepState || "cozido").slice(0, 60),
+      portionGrams: portion,
+      portionReasoning: String(it?.portionReasoning || "").slice(0, 300),
+      kcalPer100g: Math.round(kcal100),
+      // Matemática exata no servidor: porção × valor/100g
+      calories: Math.round(portion * kcal100 / 100),
+      protein: round12(portion * p100 / 100),
+      carbs: round12(portion * c100 / 100),
+      fat: round12(portion * g100 / 100),
+      fiber: round12(portion * f100 / 100),
+      confidence: Math.round(clampNum(it?.confidence, 0, 100, 75)),
+      reasoning: String(it?.reasoning || it?.portionReasoning || "").slice(0, 300),
+      source: "TACO"
+    };
+  }).filter((x) => x !== null);
+  const round1 = (x) => Math.round(x * 10) / 10;
+  const totals = items.reduce(
+    (acc, it) => {
+      acc.totalGrams += it.portionGrams;
+      acc.calories += it.calories;
+      acc.protein += it.protein;
+      acc.carbs += it.carbs;
+      acc.fat += it.fat;
+      acc.fiber += it.fiber;
+      return acc;
+    },
+    { totalGrams: 0, calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+  );
+  return {
+    mealName: String(parsed?.mealName || "Refei\xE7\xE3o analisada").slice(0, 160),
+    overallConfidence: Math.round(clampNum(parsed?.overallConfidence, 0, 100, 75)),
+    confidenceNotes: String(parsed?.confidenceNotes || "").slice(0, 500),
+    questionsForMariana: Array.isArray(parsed?.questionsForMariana) ? parsed.questionsForMariana.map((q) => String(q).slice(0, 300)).slice(0, 5) : [],
+    items,
+    totals: {
+      totalGrams: round1(totals.totalGrams),
+      calories: totals.calories,
+      protein: round1(totals.protein),
+      carbs: round1(totals.carbs),
+      fat: round1(totals.fat),
+      fiber: round1(totals.fiber)
+    }
+  };
+}
 app.post("/api/gemini/analyze-meal", async (req, res) => {
   try {
     const { imageBase64, mimeType = "image/jpeg", notes, mealType } = req.body;
@@ -3205,18 +3348,37 @@ Analise detalhadamente a refei\xE7\xE3o na fotografia enviada por Mariana.
 Refei\xE7\xE3o pretendida: ${mealType || "Refei\xE7\xE3o"}.
 Notas adicionais da usu\xE1ria: ${notes || "Nenhuma"}.
 
-Instru\xE7\xF5es rigorosas:
+M\xC9TODO OBRIGAT\xD3RIO (nesta ordem):
 1. Identifique todos os alimentos vis\xEDveis separadamente (ex: separar arroz, feij\xE3o, frango grelhado, salada, azeite).
-2. Para cada alimento, determine o estado de preparo exato (cru, cozido em \xE1gua, grelhado, assado, frito, refogado com \xF3leo/azeite, no vapor).
-3. Estime a por\xE7\xE3o em gramas com base em refer\xEAncias visuais de prato/recipiente, volume tridimensional e propor\xE7\xF5es. NUNCA invente n\xFAmeros mirabolantes; seja realista e prudente.
-4. Calcule com precis\xE3o matem\xE1tica os valores nutricionais baseados na TACO/TBCA para aquela quantidade em gramas:
-   - Calorias (kcal)
-   - Prote\xEDnas (g)
-   - Carboidratos (g)
-   - Gorduras totais (g)
-   - Fibras (g)
-5. Estime o n\xEDvel de confian\xE7a geral (0 a 100).
-6. Se houver alguma incerteza (ex: n\xE3o d\xE1 para saber se o feij\xE3o tem lingui\xE7a ou se o molho leva creme de leite), fa\xE7a 1 a 2 perguntas curtas e gentis para a Mariana confirmar.
+2. ESCALA VISUAL \u2014 use refer\xEAncias da pr\xF3pria cena como r\xE9gua para medir:
+   - Prato de almo\xE7o comum \u2248 24 cm de di\xE2metro; potes/marmitas: me\xE7a pela borda vis\xEDvel
+   - Garfo \u2248 18 cm, faca \u2248 20 cm, colher de sopa \u2248 14 cm
+   - Concha cheia de arroz/feij\xE3o \u2248 100-120 g; rasa \u2248 60-80 g
+   - Palmo de carne grelhada \u2248 100 g; fil\xE9 de peito de frango \u2248 100-180 g
+   - Ovo inteiro \u2248 55 g; fatia de p\xE3o franc\xEAs \u2248 30 g; fatia de queijo \u2248 25 g
+   - Banana prata inteira \u2248 100 g; punhado de batata frita \u2248 100 g; fatia de bolo \u2248 80-120 g
+   Compare cada alimento com essas refer\xEAncias e estime os gramas. NUNCA invente n\xFAmeros mirabolantes; seja realista e prudente.
+3. Determine o estado de preparo exato (cru, cozido em \xE1gua, grelhado, assado, frito, refogado com \xF3leo/azeite, no vapor) \u2014 ele muda os valores por 100 g.
+4. \xD3LEO INVIS\xCDVEL: se houver brilho, fritura ou refogado, some 5-15 g de \xF3leo/azeite (\u2248 45-135 kcal) \xE0 por\xE7\xE3o; s\xF3 n\xE3o some se a foto demonstrar claramente que n\xE3o houve gordura no preparo.
+5. Peso l\xEDquido: desconte osso, casca, semente, caro\xE7o e embalagem.
+6. Para cada alimento informe os valores POR 100 g usando a refer\xEAncia TACO abaixo (kcal / prote\xEDna g / carboidrato g / gordura g / fibra g):
+   arroz branco cozido 128/2.5/28/0.2/1.6 | arroz integral cozido 112/2.6/23/1.0/2.7 | feij\xE3o cozido 76/4.8/14/0.5/8 | macarr\xE3o cozido 147/5/30/1/1.8 | cuscuz 115/3/25/0.5/1.5
+   frango peito grelhado 159/32/0/2.5/0 | frango perna/coxa grelhado 205/28/0/9/0 | carne bovina grelhada 220/30/0/10/0 | carne mo\xEDda refogada 160/19/0/8/0 | porco grelhado 240/28/0/14/0
+   peixe branco grelhado 130/23/0/4/0 | salm\xE3o grelhado 230/24/0/15/0 | camar\xE3o grelhado 100/20/1/1.5/0 | ovo frito 240/14/1.6/19/0 | ovo cozido 155/13/1.1/11/0
+   batata frita 267/3.5/35/13/3 | batata cozida 52/1.2/12/0/1.3 | batata-doce cozida 77/0.6/18/0.1/2.2 | batata-doce assada 90/2/21/0.1/3.3 | aipim cozido 125/0.6/30/0.3/1.8 | polenta 80/1.5/17/0.5/0.5 | pur\xEA de batata 100/2/17/2.5/1.5
+   p\xE3o franc\xEAs 330/8/60/5/2.4 | p\xE3o de forma 250/8/48/3.5/2.5 | queijo mussarela 300/19/3/25/0 | queijo prato 350/18/1.9/30/0 | requeij\xE3o 260/5/3.5/26/0 | creme de leite 190/2.5/3/20/0 | leite integral 61/3.2/4.7/3.3/0 | iogurte natural 55/4/4.7/1.5/0
+   azeite/\xF3leo/manteiga 884/0/0/100/0 | maionese 300/1/4/32/0 | farofa pronta 500/6/60/26/4
+   br\xF3colis cozido 34/2.8/6/0.4/3.3 | couve refogada 90/3/6/6/4 | cenoura cozida 43/0.8/10/0.2/3.2 | tomate 15/1.1/3.1/0.2/1.2 | milho verde 105/3.4/19/1.5/4 | gr\xE3o-de-bico cozido 150/8/25/2.5/7 | lentilha cozida 105/8/18/0.5/5
+   banana prata 98/1.3/26/0.1/2 | ma\xE7\xE3 56/0.4/15/0.1/1.3 | abacaxi 45/0.9/12/0.1/1.3 | manga 60/0.9/15/0.2/1.6
+   biscoito requeij\xE3o 480/7/66/20/2 | bolo 350/5/50/13/1.5 | chocolate ao leite 550/7/55/33/2 | cereal matinal 370/7/80/1.5/3 | granola 430/10/65/16/6 | aveia em flocos 360/13/60/7/9
+   pizza mussarela 270/11/33/11/2 | hamb\xFArguer 250/17/20/13/1 | bacon 450/30/0/37/0 | lingui\xE7a 300/16/2/26/0 | sardinha enlatada 190/25/0/9/0 | atum em \xF3leo 220/25/0/13/0
+   refrigerante 42/0/11/0/0 | suco de fruta natural 50/0.5/12/0.1/0.3 | cerveja 43/0.5/3.6/0/0
+   Para alimentos fora da tabela, estime valores t\xEDpicos de composi\xE7\xE3o \u2014 seja prudente.
+7. AUTO-VERIFICA\xC7\xC3O OBRIGAT\xD3RIA antes de responder:
+   a) calorias/100g \u2248 (4 \xD7 carboidratos) + (4 \xD7 prote\xEDnas) + (9 \xD7 gorduras) \u2014 se divergir mais de 15%, corrija as calorias ou os macros;
+   b) calorias da por\xE7\xE3o = gramas \xD7 calorias/100g \xF7 100 \u2014 confira a conta de cada item; os totais s\xE3o a soma exata dos itens.
+8. Explique cada estimativa com medida caseira (ex.: "2 conchas cheias \u2248 140g", "meio prato \u2248 120g").
+9. Estime a confian\xE7a geral (0 a 100). Se a foto n\xE3o permitir estimar bem (escuro, cortado, por\xE7\xE3o emberrada), reduza a confian\xE7a e fa\xE7a 1 a 2 perguntas curtas e gentis para a Mariana confirmar.
 
 Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
 {
@@ -3229,13 +3391,19 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
       "foodName": "Peito de frango",
       "prepState": "grelhado",
       "portionGrams": 130,
+      "portionReasoning": "Fatia com ~1,5 palmo de largura \u2248 130g",
+      "kcalPer100g": 159,
+      "proteinPer100g": 32,
+      "carbsPer100g": 0,
+      "fatPer100g": 2.5,
+      "fiberPer100g": 0,
+      "confidence": 90,
+      "reasoning": "Fil\xE9 m\xE9dio de aproximadamente 130g grelhado sem pele",
       "calories": 207,
       "protein": 41.6,
       "carbs": 0,
-      "fat": 3.9,
-      "fiber": 0,
-      "source": "TACO",
-      "reasoning": "Fil\xE9 m\xE9dio de aproximadamente 130g grelhado sem pele"
+      "fat": 3.3,
+      "fiber": 0
     }
   ],
   "totals": {
@@ -3260,11 +3428,12 @@ Responda OBRIGATORIAMENTE em formato JSON com o seguinte formato:
           { text: promptText }
         ]
       },
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      responseSchema: MEAL_ANALYSIS_SCHEMA,
+      temperature: 0.3
     });
-    const responseText = response.text || "{}";
-    const parsed = JSON.parse(responseText);
-    return res.json(parsed);
+    const parsed = parseJsonLoose(response.text || "{}");
+    return res.json(normalizeMealAnalysis(parsed));
   } catch (err) {
     console.error("Erro no reconhecimento alimentar Gemini:", err);
     return res.status(500).json({
